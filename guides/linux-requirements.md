@@ -29,7 +29,7 @@ sudo apt-get install -y libpcap0.8
 
 On some releases the package is named `libpcap0.8t64` or similar; `apt-cache search libpcap0` shows the exact name. Ubuntu 24.04 often lists **`libpcap0.8t64`** or **`libpcap0.25`** depending on archive — install whichever `apt` offers for “libpcap runtime”.
 
-Nothing else is required at runtime if you copy a **pre-built** `dist/bwmon` binary from another machine (same OS/arch, e.g. `linux/amd64`).
+Nothing else is required at runtime if you copy a **pre-built** `dist/Belazd-IP-SNMP` binary from another machine (same OS/arch, e.g. `linux/amd64`).
 
 ### Kernel / OS
 
@@ -49,10 +49,10 @@ Nothing else is required at runtime if you copy a **pre-built** `dist/bwmon` bin
 **Alternative:** file capabilities on the binary:
 
 ```bash
-sudo setcap cap_net_raw,cap_net_bind_service=+ep /usr/local/bin/bwmon
+sudo setcap cap_net_raw,cap_net_bind_service=+ep /usr/local/bin/Belazd-IP-SNMP
 ```
 
-**Lab only:** `sudo ./bwmon ...` or `-simulate` (no capture, counters fake).
+**Lab only:** `sudo ./Belazd-IP-SNMP ...` or `-simulate` (no capture, counters fake).
 
 Without **CAP_NET_RAW**, capture fails at startup unless you use **`-simulate`**.
 
@@ -100,7 +100,7 @@ sudo apt-get install -y build-essential   # if CGO complains about gcc
 ./scripts/build.sh
 ```
 
-Output: **`dist/bwmon`**.
+Output: **`dist/Belazd-IP-SNMP`**.
 
 ### Build notes
 
@@ -132,7 +132,7 @@ Output: **`dist/bwmon`**.
 ## Quick checklist before `systemctl start bwmon`
 
 1. [ ] `libpcap` runtime installed  
-2. [ ] `bwmon` binary in place (e.g. `/usr/local/bin/bwmon`)  
+2. [ ] `Belazd-IP-SNMP` binary in place (e.g. `/usr/local/bin/Belazd-IP-SNMP`)  
 3. [ ] `config.yaml` edited: `capture.interface`, `snmp.communities`, `http.allowed`, queues  
 4. [ ] Optional `.env` for web login  
 5. [ ] Capabilities or systemd unit with **CAP_NET_RAW** / **CAP_NET_BIND_SERVICE**  

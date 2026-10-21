@@ -3,6 +3,7 @@ param(
   [switch]$InstallDeps
 )
 $ErrorActionPreference = "Stop"
+$BinName = "Belazd-IP-SNMP"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
@@ -17,6 +18,7 @@ if (-not $SkipTest) { go test ./... }
 New-Item -ItemType Directory -Force -Path dist | Out-Null
 $commit = try { git rev-parse --short HEAD } catch { "none" }
 $env:CGO_ENABLED = "1"
-go build -ldflags "-X main.version=0.1.0 -X main.commit=$commit" -o dist/bwmon.exe ./cmd/bwmon
-Write-Host "Built dist/bwmon.exe"
-Write-Host "Smoke: .\dist\bwmon.exe -simulate -insecure-snmp-open -insecure-http-open"
+$out = Join-Path "dist" "${BinName}.exe"
+go build -ldflags "-X main.version=0.1.0 -X main.commit=$commit" -o $out ./cmd/bwmon
+Write-Host "Built $out"
+Write-Host "Smoke: .\$out -simulate -insecure-snmp-open -insecure-http-open"

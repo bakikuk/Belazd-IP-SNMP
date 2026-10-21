@@ -14,7 +14,7 @@ cp .env.example .env
 # .env = web login only; edit SNMP / HTTP allowed in the UI or config.yaml
 ./scripts/build.sh --install-deps   # first time: installs golang-go + libpcap-dev
 ./scripts/build.sh                # later builds
-./dist/bwmon -simulate -config config.yaml
+./dist/Belazd-IP-SNMP -simulate -config config.yaml
 ```
 
 Windows: `.\scripts\build.ps1` (Npcap + CGO). See below.
@@ -75,7 +75,7 @@ See [guides/linux-requirements.md](guides/linux-requirements.md) for full packag
 
 ```bash
 sudo apt install libpcap0.8t64
-sudo cp dist/bwmon /usr/local/bin/
+sudo install -m 755 dist/Belazd-IP-SNMP /usr/local/bin/Belazd-IP-SNMP
 sudo mkdir -p /etc/bwmon
 sudo cp config.example.yaml /etc/bwmon/config.yaml
 # edit /etc/bwmon/config.yaml
@@ -89,11 +89,11 @@ Capabilities in unit: `CAP_NET_BIND_SERVICE`, `CAP_NET_RAW` for `:161` and captu
 **Manual binary (no systemd):** packet capture needs raw socket access:
 
 ```bash
-sudo setcap cap_net_raw,cap_net_bind_service=+ep /usr/local/bin/bwmon
-./bwmon -config /etc/bwmon/config.yaml
+sudo setcap cap_net_raw,cap_net_bind_service=+ep /usr/local/bin/Belazd-IP-SNMP
+./Belazd-IP-SNMP -config /etc/bwmon/config.yaml
 ```
 
-Or run once as root: `sudo ./bwmon ...` (not recommended long-term). Without caps, use `-simulate` for SNMP/UI testing only.
+Or run once as root: `sudo ./Belazd-IP-SNMP ...` (not recommended long-term). Without caps, use `-simulate` for SNMP/UI testing only.
 
 ## MRTG / Zabbix
 
@@ -114,4 +114,4 @@ Main CPU cost is **packet capture**, not SNMP polling. Use narrow targets/BPF; ~
 | Linux | `./scripts/build.sh` |
 | Windows | `.\scripts\build.ps1` |
 
-Output: `dist/bwmon` or `dist/bwmon.exe`.
+Output: `dist/Belazd-IP-SNMP` or `dist/Belazd-IP-SNMP.exe`.

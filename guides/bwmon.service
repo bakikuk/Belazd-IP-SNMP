@@ -11,7 +11,7 @@ WorkingDirectory=/etc/bwmon
 # Web login credentials (optional). Leading "-" = file may be missing.
 EnvironmentFile=-/etc/bwmon/.env
 
-ExecStart=/usr/local/bin/bwmon \
+ExecStart=/usr/local/bin/Belazd-IP-SNMP \
   -config /etc/bwmon/config.yaml \
   -env /etc/bwmon/.env
 
@@ -24,7 +24,7 @@ CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_RAW
 NoNewPrivileges=true
 
 # Lab only — remove for production:
-# ExecStart=/usr/local/bin/bwmon -config /etc/bwmon/config.yaml -env /etc/bwmon/.env -simulate
+# ExecStart=/usr/local/bin/Belazd-IP-SNMP -config /etc/bwmon/config.yaml -env /etc/bwmon/.env -simulate
 
 LimitNOFILE=65535
 

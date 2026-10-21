@@ -12,7 +12,7 @@ Application config (SNMP, queues, HTTP ACL) lives in **`/etc/bwmon/config.yaml`*
 ## Install layout
 
 ```text
-/usr/local/bin/bwmon          # binary from dist/bwmon
+/usr/local/bin/Belazd-IP-SNMP # binary from dist/Belazd-IP-SNMP
 /etc/bwmon/config.yaml        # main config (not in git)
 /etc/bwmon/.env               # BWMON_HTTP_USER / BWMON_HTTP_PASSWORD (optional)
 /etc/systemd/system/bwmon.service
@@ -22,7 +22,7 @@ Application config (SNMP, queues, HTTP ACL) lives in **`/etc/bwmon/config.yaml`*
 
 ```bash
 sudo apt-get install -y libpcap0.8t64
-sudo install -m 755 dist/bwmon /usr/local/bin/bwmon
+sudo install -m 755 dist/Belazd-IP-SNMP /usr/local/bin/Belazd-IP-SNMP
 sudo mkdir -p /etc/bwmon
 sudo install -m 600 config.example.yaml /etc/bwmon/config.yaml
 sudo install -m 600 guides/bwmon.env.example /etc/bwmon/.env
@@ -45,8 +45,8 @@ After changing **`config.yaml`** from the UI, a **restart** is only required if 
 ## Without systemd
 
 ```bash
-sudo setcap cap_net_raw,cap_net_bind_service=+ep /usr/local/bin/bwmon
-cd /etc/bwmon && /usr/local/bin/bwmon -config /etc/bwmon/config.yaml -env /etc/bwmon/.env
+sudo setcap cap_net_raw,cap_net_bind_service=+ep /usr/local/bin/Belazd-IP-SNMP
+cd /etc/bwmon && /usr/local/bin/Belazd-IP-SNMP -config /etc/bwmon/config.yaml -env /etc/bwmon/.env
 ```
 
 See also [linux-requirements.md](linux-requirements.md).

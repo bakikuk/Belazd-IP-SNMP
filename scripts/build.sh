@@ -2,8 +2,9 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+BIN_NAME="Belazd-IP-SNMP"
 if [[ ! -f "${ROOT}/go.mod" ]]; then
-  echo "error: go.mod not found in ${ROOT} — run this from the full bwmon repo (scripts/ is inside the project)." >&2
+  echo "error: go.mod not found in ${ROOT} — run this from the full repo (scripts/ is inside the project)." >&2
   exit 1
 fi
 if [[ "${1:-}" == "--install-deps" ]]; then
@@ -21,6 +22,6 @@ go mod download
 go test ./...
 mkdir -p dist
 COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo none)"
-CGO_ENABLED=1 go build -ldflags "-X main.version=0.1.0 -X main.commit=${COMMIT}" -o dist/bwmon ./cmd/bwmon
-echo "Built dist/bwmon"
-echo "Smoke: ./dist/bwmon -simulate -insecure-snmp-open -insecure-http-open -config config.example.yaml"
+CGO_ENABLED=1 go build -ldflags "-X main.version=0.1.0 -X main.commit=${COMMIT}" -o "dist/${BIN_NAME}" ./cmd/bwmon
+echo "Built dist/${BIN_NAME}"
+echo "Smoke: ./dist/${BIN_NAME} -simulate -insecure-snmp-open -insecure-http-open -config config.example.yaml"

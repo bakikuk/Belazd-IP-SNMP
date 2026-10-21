@@ -11,7 +11,7 @@ WorkingDirectory=/etc/bwmon
 
 EnvironmentFile=-/etc/bwmon/.env
 
-ExecStart=/usr/local/bin/bwmon \
+ExecStart=/usr/local/bin/Belazd-IP-SNMP \
   -config /etc/bwmon/config.yaml \
   -env /etc/bwmon/.env
 
