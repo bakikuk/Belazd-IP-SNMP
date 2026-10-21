@@ -193,22 +193,24 @@ func (s *Services) handleStats(w http.ResponseWriter, r *http.Request) {
 	s.mu.RUnlock()
 	snap := store.Snapshot()
 	type row struct {
-		Index    int    `json:"index"`
-		Target   string `json:"target"`
-		Label    string `json:"label"`
-		BytesIn  uint64 `json:"bytesIn"`
-		BytesOut uint64 `json:"bytesOut"`
-		OIDIn    string `json:"oidIn"`
-		OIDOut   string `json:"oidOut"`
-		OIDName  string `json:"oidName"`
+		Index      int    `json:"index"`
+		Target     string `json:"target"`
+		TargetKind string `json:"targetKind"`
+		Label      string `json:"label"`
+		BytesIn    uint64 `json:"bytesIn"`
+		BytesOut   uint64 `json:"bytesOut"`
+		OIDIn      string `json:"oidIn"`
+		OIDOut     string `json:"oidOut"`
+		OIDName    string `json:"oidName"`
 	}
 	var out []row
 	for _, q := range cfg.Queues {
 		p := snap[q.Index]
 		out = append(out, row{
-			Index:    q.Index,
-			Target:   q.Target,
-			Label:    q.Label,
+			Index:      q.Index,
+			Target:     q.Target,
+			TargetKind: config.TargetKind(q.Target),
+			Label:      q.Label,
 			BytesIn:  p.BytesIn,
 			BytesOut: p.BytesOut,
 			OIDIn:    cfg.OIDFull(cfg.SNMP.OIDSuffix.BytesIn, q.Index),

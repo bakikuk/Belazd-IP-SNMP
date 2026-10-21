@@ -16,6 +16,6 @@ Options[bwmon-customer]: growright,bits
 Title[bwmon-customer]: Customer queue 1
 ```
 
-Replace `.8.1` / `.9.1` with OIDs from the web UI for each queue index.
+Replace `.8.1` / `.9.1` with OIDs from the web UI **Queues** table for each queue index.
 
 Counters are **bytes** (Counter64); MRTG `derive` computes rate between polls.

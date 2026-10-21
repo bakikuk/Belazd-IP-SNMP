@@ -8,8 +8,9 @@ type Runner interface {
 
 // Config for capture.
 type Config struct {
-	Interface string
-	Snaplen   int
-	Targets   []string
-	Simulate  bool
+	Interface    string
+	Snaplen      int
+	ForceWide    bool
+	BPFFragments []string
+	Simulate     bool
 }

@@ -182,35 +182,20 @@ func validateOIDSuffix(s OIDSuffix) error {
 	return nil
 }
 
-// ValidateTarget checks IPv4 host, CIDR, or interface target (@eth0 / if:eth0).
+// ValidateTarget checks include/exclude IP lists or interface target (@eth0 / if:eth0).
 func ValidateTarget(target string) error {
-	target = strings.TrimSpace(target)
-	if target == "" {
-		return fmt.Errorf("empty target")
+	spec, err := ParseTarget(target)
+	if err != nil {
+		return err
 	}
-	if IsIfaceTarget(target) {
-		name, err := ParseIfaceName(target)
-		if err != nil {
-			return err
-		}
-		if _, err := net.InterfaceByName(name); err != nil {
-			return fmt.Errorf("interface %q: %w", name, err)
+	if spec.Mode == TargetModeIface {
+		if _, err := net.InterfaceByName(spec.IfaceName); err != nil {
+			return fmt.Errorf("interface %q: %w", spec.IfaceName, err)
 		}
 		return nil
 	}
-	if strings.Contains(target, "/") {
-		_, n, err := net.ParseCIDR(target)
-		if err != nil {
-			return err
-		}
-		if n.IP.To4() == nil {
-			return fmt.Errorf("IPv6 not supported")
-		}
-		return nil
-	}
-	ip := net.ParseIP(target)
-	if ip == nil || ip.To4() == nil {
-		return fmt.Errorf("invalid IPv4: %q", target)
+	if len(spec.Entries) == 0 {
+		return fmt.Errorf("target needs at least one IP or CIDR")
 	}
 	return nil
 }

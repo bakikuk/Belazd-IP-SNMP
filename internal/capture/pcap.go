@@ -5,7 +5,6 @@ package capture
 import (
 	"context"
 	"fmt"
-	"net"
 	"strings"
 	"sync"
 
@@ -18,14 +17,11 @@ import (
 const maxBPFClauses = 64
 
 type pcapRunner struct {
-	store     *accounting.Store
-	iface     string
-	snaplen   int
-	targets   []string
-	handle    *pcap.Handle
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
-	useWideBP bool
+	store   *accounting.Store
+	cfg     Config
+	handle  *pcap.Handle
+	cancel  context.CancelFunc
+	wg      sync.WaitGroup
 }
 
 // NewPcap creates a libpcap-based runner.
@@ -33,17 +29,12 @@ func NewPcap(store *accounting.Store, cfg Config) (Runner, error) {
 	if cfg.Interface == "" {
 		return nil, fmt.Errorf("capture: interface required")
 	}
-	return &pcapRunner{
-		store:   store,
-		iface:   cfg.Interface,
-		snaplen: cfg.Snaplen,
-		targets: cfg.Targets,
-	}, nil
+	return &pcapRunner{store: store, cfg: cfg}, nil
 }
 
 func (r *pcapRunner) Start() error {
-	filter, wide := buildBPFFilter(r.targets)
-	h, err := pcap.OpenLive(r.iface, int32(r.snaplen), true, pcap.BlockForever)
+	filter := buildBPFFilter(r.cfg.ForceWide, r.cfg.BPFFragments)
+	h, err := pcap.OpenLive(r.cfg.Interface, int32(r.cfg.Snaplen), true, pcap.BlockForever)
 	if err != nil {
 		return err
 	}
@@ -54,7 +45,6 @@ func (r *pcapRunner) Start() error {
 		}
 	}
 	r.handle = h
-	r.useWideBP = wide
 	ctx, cancel := context.WithCancel(context.Background())
 	r.cancel = cancel
 	src := gopacket.NewPacketSource(h, h.LinkType())
@@ -97,66 +87,15 @@ func (r *pcapRunner) process(pkt gopacket.Packet) {
 		return
 	}
 	length := uint64(len(ipLayer.LayerContents()))
-	if r.useWideBP {
-		if !packetMatchesTargets(ip.SrcIP, ip.DstIP, r.targets) {
-			return
-		}
-	}
 	r.store.AccountIPv4(ip.SrcIP, ip.DstIP, length)
 }
 
-func buildBPFFilter(targets []string) (filter string, wide bool) {
-	if len(targets) == 0 {
-		return "ip", true
+func buildBPFFilter(forceWide bool, fragments []string) string {
+	if forceWide || len(fragments) == 0 {
+		return "ip"
 	}
-	if len(targets) > maxBPFClauses {
-		return "ip", true
+	if len(fragments) > maxBPFClauses {
+		return "ip"
 	}
-	var parts []string
-	for _, t := range targets {
-		t = strings.TrimSpace(t)
-		if t == "" {
-			continue
-		}
-		if strings.Contains(t, "/") {
-			ip, n, err := net.ParseCIDR(t)
-			if err != nil {
-				continue
-			}
-			mask, _ := n.Mask.Size()
-			if ip.To4() != nil {
-				parts = append(parts, fmt.Sprintf("net %s/%d", ip.String(), mask))
-			}
-		} else {
-			parts = append(parts, "host "+t)
-		}
-	}
-	if len(parts) == 0 {
-		return "ip", true
-	}
-	return strings.Join(parts, " or "), false
-}
-
-func packetMatchesTargets(src, dst net.IP, targets []string) bool {
-	for _, t := range targets {
-		t = strings.TrimSpace(t)
-		if t == "" {
-			continue
-		}
-		if strings.Contains(t, "/") {
-			_, n, err := net.ParseCIDR(t)
-			if err != nil {
-				continue
-			}
-			if n.Contains(src) || n.Contains(dst) {
-				return true
-			}
-			continue
-		}
-		ip := net.ParseIP(t)
-		if ip != nil && (ip.Equal(src) || ip.Equal(dst)) {
-			return true
-		}
-	}
-	return false
+	return strings.Join(fragments, " or ")
 }

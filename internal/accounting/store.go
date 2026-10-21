@@ -1,10 +1,8 @@
 package accounting
 
 import (
-	"fmt"
 	"net"
 	"sort"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -15,8 +13,7 @@ import (
 type Matcher struct {
 	Index  int
 	Target string
-	Net    *net.IPNet
-	Host   net.IP
+	Spec   config.TargetSpec
 }
 
 // Store holds counters and matchers.
@@ -52,11 +49,11 @@ func (s *Store) Rebuild(queues []config.Queue) {
 			}
 			continue
 		}
-		m, err := newMatcher(q)
+		spec, err := config.ParseTarget(q.Target)
 		if err != nil {
 			continue
 		}
-		s.matchers = append(s.matchers, m)
+		s.matchers = append(s.matchers, Matcher{Index: q.Index, Target: q.Target, Spec: spec})
 		s.queueMeta[q.Index] = q
 		if s.bytesIn[q.Index] == nil {
 			s.bytesIn[q.Index] = &atomic.Uint64{}
@@ -64,24 +61,6 @@ func (s *Store) Rebuild(queues []config.Queue) {
 		}
 	}
 	sort.Slice(s.matchers, func(i, j int) bool { return s.matchers[i].Index < s.matchers[j].Index })
-}
-
-func newMatcher(q config.Queue) (Matcher, error) {
-	m := Matcher{Index: q.Index, Target: q.Target}
-	if strings.Contains(q.Target, "/") {
-		_, n, err := net.ParseCIDR(q.Target)
-		if err != nil {
-			return m, err
-		}
-		m.Net = n
-		return m, nil
-	}
-	ip := net.ParseIP(q.Target)
-	if ip == nil {
-		return m, fmt.Errorf("bad ip")
-	}
-	m.Host = ip.To4()
-	return m, nil
 }
 
 // AccountIPv4 adds length bytes for src/dst (IPv4).
@@ -95,24 +74,13 @@ func (s *Store) AccountIPv4(src, dst net.IP, length uint64) {
 	matchers := s.matchers
 	s.mu.RUnlock()
 	for _, m := range matchers {
-		if m.matchDst(dst) {
+		if m.Spec.MatchesIn(dst) {
 			s.counterIn(m.Index).Add(length)
 		}
-		if m.matchSrc(src) {
+		if m.Spec.MatchesOut(src) {
 			s.counterOut(m.Index).Add(length)
 		}
 	}
-}
-
-func (m Matcher) matchDst(ip net.IP) bool {
-	if m.Host != nil {
-		return m.Host.Equal(ip)
-	}
-	return m.Net != nil && m.Net.Contains(ip)
-}
-
-func (m Matcher) matchSrc(ip net.IP) bool {
-	return m.matchDst(ip)
 }
 
 func (s *Store) counterIn(idx int) *atomic.Uint64 {

@@ -4,7 +4,7 @@ Standalone **SNMP Counter64** source for **MRTG**, Zabbix, Cacti, and similar po
 
 **History and graphs live on the poller** (MRTG RRD, etc.), not in this process.
 
-**Linux install checklist (packages, caps, firewall):** [docs/linux-requirements.md](docs/linux-requirements.md)
+**Documentation:** [guides/README.md](guides/README.md) (Linux install, systemd, MRTG, Zabbix)
 
 ## Quick start (lab)
 
@@ -43,13 +43,23 @@ SNMP communities, **`http.allowed`**, capture, OIDs, and queues are configured i
 
 Counters are **bytes** (L3/IP length). MRTG/Zabbix usually apply **×8** for **bit/s** graphs. Web UI shows both **kbit/s** (Δbytes×8÷Δt) and **KB/s** (Δbytes÷Δt).
 
+### Queue target expressions
+
+| Form | Example | Meaning |
+|------|---------|---------|
+| **Include** | `10.0.0.1,203.0.113.0/24` | Count traffic to/from **any** listed IPv4/CIDR (one SNMP index). |
+| **Exclude** | `!10.0.0.50,!192.168.1.0/24` | Count **all other** IPv4 on `capture.interface` except listed entries (wide capture — more CPU). |
+| **Interface** | `@eth0` / `if:eth0` | **Kernel NIC** `rx_bytes` / `tx_bytes` (bpytop/nload style). |
+
+Do **not** mix include and exclude in one target. The web UI **Add Target** builder writes these strings for you.
+
 ### Per-IP vs total interface (bpytop / nload)
 
 | Target | What it measures |
 |--------|------------------|
-| `160.30.224.52` or CIDR | L3 bytes in **captured** packets matching that IP (gateway/mirror) |
-| `0.0.0.0/0` | Same, but every IP — still **pcap**, not NIC totals; counts each packet toward both in+out; usually **≠** terminal Mbps |
-| `@eth0` or `if:eth0` | **Kernel NIC counters** (`rx_bytes` / `tx_bytes`) — aligns with bpytop/nload on that interface |
+| Single IP or include list | L3 bytes in **captured** packets matching those IPs (gateway/mirror) |
+| `0.0.0.0/0` in include list | Still **pcap**, not NIC totals; usually **≠** terminal Mbps |
+| `@eth0` or `if:eth0` | **Kernel NIC counters** — aligns with bpytop/nload on that interface |
 
 Use the same interface name as in `capture.interface` when comparing to terminal tools.
 
@@ -61,7 +71,7 @@ Use the same interface name as in `capture.interface` when comparing to terminal
 
 ## Ubuntu 24 deploy
 
-See [docs/linux-requirements.md](docs/linux-requirements.md) for full package and permission details.
+See [guides/linux-requirements.md](guides/linux-requirements.md) for full package and permission details.
 
 ```bash
 sudo apt install libpcap0.8t64
@@ -69,7 +79,7 @@ sudo cp dist/bwmon /usr/local/bin/
 sudo mkdir -p /etc/bwmon
 sudo cp config.example.yaml /etc/bwmon/config.yaml
 # edit /etc/bwmon/config.yaml
-sudo cp deploy/bwmon.service /etc/systemd/system/
+sudo cp guides/bwmon.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now bwmon
 ```
@@ -87,7 +97,7 @@ Or run once as root: `sudo ./bwmon ...` (not recommended long-term). Without cap
 
 ## MRTG / Zabbix
 
-See [docs/mrtg-snmp.md](docs/mrtg-snmp.md) and [docs/zabbix-items.md](docs/zabbix-items.md).
+See [guides/mrtg-snmp.md](guides/mrtg-snmp.md) and [guides/zabbix-items.md](guides/zabbix-items.md).
 
 ## Windows / Npcap
 

@@ -44,7 +44,7 @@ Nothing else is required at runtime if you copy a **pre-built** `dist/bwmon` bin
 | **CAP_NET_RAW** | Packet capture (libpcap) |
 | **CAP_NET_BIND_SERVICE** | Bind SNMP to **UDP 161** (privileged port) |
 
-**Recommended:** run under **systemd** with `AmbientCapabilities` (see `deploy/bwmon.service`).
+**Recommended:** run under **systemd** with `AmbientCapabilities` (see [systemd-daemon.md](systemd-daemon.md) and [bwmon.service](bwmon.service)).
 
 **Alternative:** file capabilities on the binary:
 
@@ -113,10 +113,10 @@ Output: **`dist/bwmon`**.
 
 | Tool | Use |
 |------|-----|
-| **systemd** | Service install: `deploy/bwmon.service` |
-| **snmp** / **snmpwalk** | Test OIDs: `sudo apt install snmp` |
+| **systemd** | [systemd-daemon.md](systemd-daemon.md), [bwmon.service](bwmon.service) |
+| **snmp** / **snmpwalk** | Test OIDs: `sudo apt install snmp` — see [mrtg-snmp.md](mrtg-snmp.md) |
 | **iproute2** | `ip link`, `ip addr` — pick `capture.interface` |
-| **MRTG / Zabbix / Cacti** | Graphing — runs on **monitoring servers**, not bundled with BWMON |
+| **MRTG / Zabbix / Cacti** | [mrtg-snmp.md](mrtg-snmp.md), [zabbix-items.md](zabbix-items.md) |
 
 ---
 

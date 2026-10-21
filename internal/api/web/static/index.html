@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="en">
+<!-- bwmon:maintainer=bakikuk;github=https://github.com/bakikuk;uid=69292445 -->
+<html lang="en" data-bwmon-maintainer="69292445">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -43,6 +44,7 @@
       <nav class="nav">
         <a href="#queues" class="nav-item active" data-nav="queues"><span class="material-symbols-outlined" style="font-size:17px">lan</span> 01 Queues</a>
         <a href="#settings" class="nav-item" data-nav="settings"><span class="material-symbols-outlined" style="font-size:17px">settings</span> 02 Settings</a>
+        <a href="#about" class="nav-item" data-nav="about"><span class="material-symbols-outlined" style="font-size:17px">info</span> 03 About</a>
       </nav>
     </aside>
     <div class="main">
@@ -92,9 +94,45 @@
             <h1>Add Monitoring Target</h1>
           </div>
           <div class="panel form-grid">
-            <p style="font-family:var(--font-mono);font-size:12px;color:var(--surface-muted)">IPv4 host or CIDR. Counters appear under SNMP index N after save.</p>
-            <div><label>Target (IPv4 / CIDR / interface)</label><input id="addTarget" placeholder="168.78.226.59 | 10.0.0.0/24 | @eth0" /></div>
-            <p style="font-family:var(--font-mono);font-size:11px;color:var(--surface-muted);margin:0">Match bpytop/nload: use <strong>@eth0</strong> (your WAN/LAN iface name). <strong>0.0.0.0/0</strong> is per-packet IP capture, not total NIC speed.</p>
+            <p style="font-family:var(--font-mono);font-size:12px;color:var(--surface-muted)">Choose what to count. One queue = one SNMP index after save.</p>
+            <div>
+              <label>Target type</label>
+              <div class="segmented" role="group" aria-label="Target type">
+                <button type="button" class="segmented-btn active" data-target-mode="include">Include IPs</button>
+                <button type="button" class="segmented-btn" data-target-mode="exclude">All except</button>
+                <button type="button" class="segmented-btn" data-target-mode="iface">Interface</button>
+              </div>
+            </div>
+            <div id="addIpBlock">
+              <label for="addIpList">IPs / CIDRs (one per line)</label>
+              <textarea id="addIpList" rows="5" placeholder="203.0.113.10&#10;10.0.0.0/24"></textarea>
+            </div>
+            <div id="addExcludeWarn" class="target-warn hidden">Counts all other IPv4 on the capture interface — uses more CPU. Prefer Include when you know customer IPs.</div>
+            <div id="addIfaceBlock" class="hidden">
+              <label for="addIfaceName">Interface name</label>
+              <input id="addIfaceName" placeholder="eth0" autocomplete="off" />
+              <p style="font-family:var(--font-mono);font-size:11px;color:var(--surface-muted);margin:4px 0 0">Saved as <code>@eth0</code> — matches bpytop/nload NIC totals.</p>
+            </div>
+            <div>
+              <label>Preview</label>
+              <div id="addTargetPreview" class="target-preview">Will save as: —</div>
+            </div>
+            <details class="target-examples">
+              <summary>Examples</summary>
+              <div id="addExamplesInclude" class="example-block">
+                <p>Include — count traffic to/from these addresses:</p>
+                <button type="button" class="btn btn-secondary example-fill" data-fill="203.0.113.5&#10;203.0.113.0/24" style="min-height:36px">Use example</button>
+              </div>
+              <div id="addExamplesExclude" class="example-block hidden">
+                <p>All except — count everyone else on the capture interface:</p>
+                <button type="button" class="btn btn-secondary example-fill" data-fill="10.0.0.1&#10;192.168.0.0/24" style="min-height:36px">Use example</button>
+              </div>
+              <div id="addExamplesIface" class="example-block hidden">
+                <p>Interface — whole NIC byte counters:</p>
+                <button type="button" class="btn btn-secondary example-fill" data-fill="eth0" style="min-height:36px">Use example</button>
+              </div>
+            </details>
+            <div id="addTargetError" class="login-error hidden"></div>
             <div><label>Label (optional)</label><input id="addLabel" placeholder="Customer-A" /></div>
             <div class="actions-row">
               <button type="button" class="btn btn-primary" id="saveAddQueue">Create Queue</button>
@@ -110,7 +148,8 @@
           </div>
           <div class="panel form-grid">
             <div><label>Index (SNMP N)</label><input id="editIndex" readonly /></div>
-            <div><label>Target</label><input id="editTarget" readonly /></div>
+            <div><label>Target</label><div id="editTargetDisplay" class="target-preview"></div></div>
+            <p style="font-family:var(--font-mono);font-size:11px;color:var(--surface-muted);margin:0">To change targets, remove this queue and add a new one (SNMP index will change).</p>
             <div><label>Label</label><input id="editLabel" placeholder="Customer-A" /></div>
             <div class="actions-row">
               <button type="button" class="btn btn-primary" id="saveEditQueue">Save Label</button>
@@ -138,6 +177,42 @@
             <div><label>Login session secret</label><input id="httpSessionSecret" type="password" autocomplete="new-password" placeholder="Leave blank to keep current" /><p style="font-family:var(--font-mono);font-size:11px;color:var(--surface-muted);margin:4px 0 0">Stored in config.yaml. Changing it signs everyone out.</p></div>
             <div><label>SNMP communities (JSON)</label><textarea id="snmpCommunities" rows="8"></textarea></div>
             <button type="button" class="btn btn-primary" id="saveSettings">Save Settings</button>
+          </div>
+        </section>
+
+        <section id="page-about" class="hidden">
+          <div class="page-header">
+            <span class="module-tag">MODULE // 03</span>
+            <h1>About</h1>
+          </div>
+          <div class="panel about-panel">
+            <p class="about-lead">BWMON is a per-IP bandwidth SNMP agent for MRTG, Zabbix, and similar pollers. Counters are exposed as enterprise Counter64 OIDs; graphs live on your monitoring server.</p>
+            <div class="about-grid">
+              <div class="about-card">
+                <h2 class="about-subtitle">Author</h2>
+                <div class="about-profile">
+                  <img id="aboutAvatar" class="about-avatar" src="https://avatars.githubusercontent.com/u/69292445?v=4" width="96" height="96" alt="bakikuk GitHub avatar" />
+                  <div>
+                    <a id="aboutProfileLink" class="about-username" href="https://github.com/bakikuk" target="_blank" rel="noopener noreferrer">@bakikuk</a>
+                    <p id="aboutBio" class="about-meta">GitHub profile — bandwidth tools &amp; network ops.</p>
+                    <dl class="about-stats" id="aboutStats">
+                      <div><dt>Public repos</dt><dd id="aboutRepos">3</dd></div>
+                      <div><dt>Followers</dt><dd id="aboutFollowers">—</dd></div>
+                      <div><dt>Following</dt><dd id="aboutFollowing">—</dd></div>
+                      <div><dt>Member since</dt><dd id="aboutSince">Aug 2020</dd></div>
+                    </dl>
+                    <a href="https://github.com/bakikuk" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="min-height:44px;margin-top:12px">Open GitHub profile</a>
+                  </div>
+                </div>
+              </div>
+              <div class="about-card about-qr-wrap">
+                <h2 class="about-subtitle">Scan — GitHub</h2>
+                <a href="https://github.com/bakikuk" target="_blank" rel="noopener noreferrer" title="https://github.com/bakikuk">
+                  <img class="about-qr" src="github-qr.svg" width="200" height="200" alt="QR code for https://github.com/bakikuk" />
+                </a>
+                <p class="about-qr-caption">https://github.com/bakikuk</p>
+              </div>
+            </div>
           </div>
         </section>
       </div>

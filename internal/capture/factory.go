@@ -10,22 +10,24 @@ import (
 // NewRunner starts pcap (IP targets), kernel iface stats (@eth0), or simulate.
 func NewRunner(store *accounting.Store, cfg *config.Config, simulate bool) (Runner, error) {
 	var indices []int
-	var ipTargets []string
+	hasIP := false
 	for _, q := range cfg.Queues {
 		indices = append(indices, q.Index)
 		if config.IsIPTarget(q.Target) {
-			ipTargets = append(ipTargets, q.Target)
+			hasIP = true
 		}
 	}
 	if simulate {
 		return NewSimulate(store, indices), nil
 	}
 	var parts []Runner
-	if len(ipTargets) > 0 {
+	if hasIP {
+		fragments, forceWide := config.CaptureBPFPlan(cfg.Queues)
 		pcap, err := NewPcap(store, Config{
-			Interface: cfg.Capture.Interface,
-			Snaplen:   cfg.Capture.Snaplen,
-			Targets:   ipTargets,
+			Interface:    cfg.Capture.Interface,
+			Snaplen:      cfg.Capture.Snaplen,
+			ForceWide:    forceWide,
+			BPFFragments: fragments,
 		})
 		if err != nil {
 			return nil, err

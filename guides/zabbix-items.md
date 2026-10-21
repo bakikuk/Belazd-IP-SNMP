@@ -7,4 +7,4 @@
    - **SNMP agent**, OID `.1.3.6.1.4.1.55555.1.1.2.1.1.9.N` (bytes out)
 4. Preprocessing: **Change per second**, custom multiplier `8` for bits/s if needed.
 
-Use web UI **02 SNMP / OIDs** for exact paths when PEN/suffixes change.
+Use the web UI **Queues** table (OID in / OID out columns) when PEN or suffixes change.

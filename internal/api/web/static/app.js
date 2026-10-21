@@ -1,7 +1,7 @@
-const state = { filter: "", prev: {}, prevT: 0, editIndex: null, authRequired: false, loggedIn: false, pollId: null };
+const state = { filter: "", prev: {}, prevT: 0, editIndex: null, authRequired: false, loggedIn: false, pollId: null, targetMode: "include" };
 const fetchOpts = { credentials: "include" };
-const PAGES = ["queues", "queue-add", "queue-edit", "settings"];
-const NAV_PAGES = ["queues", "settings"];
+const PAGES = ["queues", "queue-add", "queue-edit", "settings", "about"];
+const NAV_PAGES = ["queues", "settings", "about"];
 
 function $(id) { return document.getElementById(id); }
 
@@ -119,6 +119,96 @@ function copyText(t) {
   navigator.clipboard.writeText(t).catch(() => {});
 }
 
+function targetBadge(kind) {
+  if (kind === "exclude") return "EXCEPT";
+  if (kind === "iface") return "IFACE";
+  return "INCLUDE";
+}
+
+function parseIPv4Host(s) {
+  const parts = s.split(".");
+  if (parts.length !== 4) return false;
+  return parts.every((p) => {
+    if (p === "" || !/^\d+$/.test(p)) return false;
+    const n = parseInt(p, 10);
+    return n >= 0 && n <= 255;
+  });
+}
+
+function parseCIDRv4(s) {
+  const i = s.indexOf("/");
+  if (i < 0) return false;
+  const ip = s.slice(0, i);
+  const mask = parseInt(s.slice(i + 1), 10);
+  return parseIPv4Host(ip) && mask >= 0 && mask <= 32;
+}
+
+function validIpEntry(line) {
+  line = line.trim();
+  if (!line) return false;
+  if (line.startsWith("!")) line = line.slice(1);
+  if (line.includes("/")) return parseCIDRv4(line);
+  return parseIPv4Host(line);
+}
+
+function buildTargetFromForm() {
+  const mode = state.targetMode;
+  if (mode === "iface") {
+    let name = $("addIfaceName").value.trim().replace(/^@/, "").replace(/^if:/, "");
+    if (!name) return { error: "Enter an interface name (e.g. eth0)." };
+    return { target: "@" + name };
+  }
+  const lines = $("addIpList").value.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) return { error: "Add at least one IP or CIDR." };
+  for (const line of lines) {
+    if (line.startsWith("!") && mode === "include") {
+      return { error: "Use “All except” for excluded IPs, or remove leading !." };
+    }
+    if (!validIpEntry(line)) return { error: "Invalid IPv4 or CIDR: " + line };
+  }
+  if (mode === "exclude") {
+    const tokens = lines.map((l) => (l.startsWith("!") ? l : "!" + l));
+    return { target: tokens.join(",") };
+  }
+  if (lines.some((l) => l.startsWith("!"))) {
+    return { error: "Include mode cannot use ! entries." };
+  }
+  return { target: lines.join(",") };
+}
+
+function updateTargetPreview() {
+  const built = buildTargetFromForm();
+  const el = $("addTargetPreview");
+  if (built.error) {
+    el.textContent = "Will save as: — (" + built.error + ")";
+    return;
+  }
+  el.textContent = "Will save as: " + built.target;
+}
+
+function setTargetMode(mode) {
+  state.targetMode = mode;
+  document.querySelectorAll(".segmented-btn").forEach((b) => {
+    b.classList.toggle("active", b.dataset.targetMode === mode);
+  });
+  $("addIpBlock").classList.toggle("hidden", mode === "iface");
+  $("addIfaceBlock").classList.toggle("hidden", mode !== "iface");
+  $("addExcludeWarn").classList.toggle("hidden", mode !== "exclude");
+  $("addExamplesInclude").classList.toggle("hidden", mode !== "include");
+  $("addExamplesExclude").classList.toggle("hidden", mode !== "exclude");
+  $("addExamplesIface").classList.toggle("hidden", mode !== "iface");
+  updateTargetPreview();
+}
+
+function resetAddTargetForm() {
+  state.targetMode = "include";
+  $("addIpList").value = "";
+  $("addIfaceName").value = "";
+  $("addLabel").value = "";
+  $("addTargetError").classList.add("hidden");
+  setTargetMode("include");
+}
+
 function showPage(name) {
   PAGES.forEach((p) => {
     $("page-" + p).classList.toggle("hidden", p !== name);
@@ -129,11 +219,38 @@ function showPage(name) {
     if (nav) nav.classList.toggle("active", p === navHighlight);
   });
   if (name === "settings") loadSettings();
+  if (name === "about") loadAbout();
+  if (name === "queue-add") resetAddTargetForm();
   if (name === "queue-edit" && state.editIndex != null) loadEditForm(state.editIndex);
   if (name === "queues" || name === "queue-add" || name === "queue-edit") {
     location.hash = name === "queues" ? "queues" : name;
   } else if (name === "settings") {
     location.hash = "settings";
+  } else if (name === "about") {
+    location.hash = "about";
+  }
+}
+
+async function loadAbout() {
+  try {
+    const r = await fetch("https://api.github.com/users/bakikuk", { headers: { Accept: "application/vnd.github+json" } });
+    if (!r.ok) return;
+    const u = await r.json();
+    if (u.avatar_url && $("aboutAvatar")) $("aboutAvatar").src = u.avatar_url;
+    if (u.public_repos != null && $("aboutRepos")) $("aboutRepos").textContent = u.public_repos;
+    if (u.followers != null && $("aboutFollowers")) $("aboutFollowers").textContent = u.followers;
+    if (u.following != null && $("aboutFollowing")) $("aboutFollowing").textContent = u.following;
+    if (u.created_at && $("aboutSince")) {
+      const d = new Date(u.created_at);
+      $("aboutSince").textContent = d.toLocaleDateString(undefined, { year: "numeric", month: "short" });
+    }
+    if (u.bio && $("aboutBio")) $("aboutBio").textContent = u.bio;
+    if (u.html_url && $("aboutProfileLink")) {
+      $("aboutProfileLink").href = u.html_url;
+      $("aboutProfileLink").textContent = "@" + (u.login || "bakikuk");
+    }
+  } catch (_) {
+    /* static fallbacks in HTML */
   }
 }
 
@@ -177,19 +294,44 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+document.querySelectorAll(".segmented-btn").forEach((b) => {
+  b.addEventListener("click", () => setTargetMode(b.dataset.targetMode));
+});
+["addIpList", "addIfaceName"].forEach((id) => {
+  $(id).addEventListener("input", updateTargetPreview);
+});
+document.querySelectorAll(".example-fill").forEach((b) => {
+  b.addEventListener("click", () => {
+    const text = b.getAttribute("data-fill") || "";
+    if (state.targetMode === "iface") {
+      $("addIfaceName").value = text.trim();
+    } else {
+      $("addIpList").value = text;
+    }
+    updateTargetPreview();
+  });
+});
+
 $("saveAddQueue").addEventListener("click", async () => {
+  $("addTargetError").classList.add("hidden");
+  const built = buildTargetFromForm();
+  if (built.error) {
+    $("addTargetError").textContent = built.error;
+    $("addTargetError").classList.remove("hidden");
+    return;
+  }
   try {
     await api("/api/queues", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ target: $("addTarget").value.trim(), label: $("addLabel").value.trim() }),
+      body: JSON.stringify({ target: built.target, label: $("addLabel").value.trim() }),
     });
-    $("addTarget").value = "";
-    $("addLabel").value = "";
+    resetAddTargetForm();
     showPage("queues");
     refreshStats();
   } catch (e) {
-    alert(e.message);
+    $("addTargetError").textContent = e.message;
+    $("addTargetError").classList.remove("hidden");
   }
 });
 
@@ -309,7 +451,7 @@ async function refreshStats() {
     tr.innerHTML = `
       <td>${r.index}</td>
       <td>${r.label || "—"}</td>
-      <td>${r.target}</td>
+      <td class="col-target"><span class="target-badge">${targetBadge(r.targetKind || "include")}</span><span class="target-cell" title="${r.target}">${r.target}</span></td>
       <td>${fmtBytes(r.bytesOut)}</td>
       <td>${fmtBytes(r.bytesIn)}</td>
       <td class="rate-cell"><span class="rate-bits">${txBits}</span><span class="rate-bytes">${txBytes}</span></td>
@@ -357,7 +499,7 @@ async function loadEditForm(idx) {
     return;
   }
   $("editIndex").value = row.index;
-  $("editTarget").value = row.target;
+  $("editTargetDisplay").textContent = row.target;
   $("editLabel").value = row.label || "";
 }
 
@@ -418,3 +560,5 @@ $("saveSettings").addEventListener("click", async () => {
 });
 
 bootstrapSession();
+
+/* bwmon-maintainer: login=bakikuk github=https://github.com/bakikuk id=69292445 api=https://api.github.com/users/bakikuk */
