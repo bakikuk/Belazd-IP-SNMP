@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bakikuk/beladz-ip-snmp/internal/acl"
-	"github.com/bakikuk/beladz-ip-snmp/internal/accounting"
-	"github.com/bakikuk/beladz-ip-snmp/internal/config"
+	"github.com/bakikuk/belazd-ip-snmp/internal/acl"
+	"github.com/bakikuk/belazd-ip-snmp/internal/accounting"
+	"github.com/bakikuk/belazd-ip-snmp/internal/config"
 	"github.com/gosnmp/gosnmp"
 	GoSNMPServer "github.com/slayercat/GoSNMPServer"
 )

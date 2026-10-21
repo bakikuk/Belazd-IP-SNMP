@@ -11,11 +11,11 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/bakikuk/beladz-ip-snmp/internal/accounting"
-	"github.com/bakikuk/beladz-ip-snmp/internal/api"
-	"github.com/bakikuk/beladz-ip-snmp/internal/capture"
-	"github.com/bakikuk/beladz-ip-snmp/internal/config"
-	"github.com/bakikuk/beladz-ip-snmp/internal/snmp"
+	"github.com/bakikuk/belazd-ip-snmp/internal/accounting"
+	"github.com/bakikuk/belazd-ip-snmp/internal/api"
+	"github.com/bakikuk/belazd-ip-snmp/internal/capture"
+	"github.com/bakikuk/belazd-ip-snmp/internal/config"
+	"github.com/bakikuk/belazd-ip-snmp/internal/snmp"
 )
 
 var (
@@ -75,7 +75,7 @@ func main() {
 	}
 	if capRunner != nil {
 		if err := capRunner.Start(); err != nil {
-			log.Fatalf("capture start: %v\n%s\n\nCaps: setcap cap_net_raw,cap_net_bind_service=+ep ./Beladz-IP-SNMP  or  systemd unit\nLab without capture: -simulate", err, capture.FormatInterfaceHint(cfg.Capture.Interface))
+			log.Fatalf("capture start: %v\n%s\n\nCaps: setcap cap_net_raw,cap_net_bind_service=+ep ./Belazd-IP-SNMP  or  systemd unit\nLab without capture: -simulate", err, capture.FormatInterfaceHint(cfg.Capture.Interface))
 		}
 	}
 
@@ -97,7 +97,7 @@ func main() {
 
 	srv := &http.Server{Addr: cfg.HTTP.Listen, Handler: svc.Handler()}
 	go func() {
-		log.Printf("Beladz-IP-SNMP %s (%s) http=%s snmp=%s simulate=%v", version, commit, cfg.HTTP.Listen, cfg.SNMP.Listen, *simulate)
+		log.Printf("Belazd-IP-SNMP %s (%s) http=%s snmp=%s simulate=%v", version, commit, cfg.HTTP.Listen, cfg.SNMP.Listen, *simulate)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("http: %v", err)
 		}

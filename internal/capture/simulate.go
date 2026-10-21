@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bakikuk/beladz-ip-snmp/internal/accounting"
+	"github.com/bakikuk/belazd-ip-snmp/internal/accounting"
 )
 
 type simulateRunner struct {

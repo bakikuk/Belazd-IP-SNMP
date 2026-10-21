@@ -1,4 +1,4 @@
-module github.com/bakikuk/beladz-ip-snmp
+module github.com/bakikuk/belazd-ip-snmp
 
 go 1.26.5
 

@@ -1,6 +1,6 @@
-# Linux requirements (Beladz-IP-SNMP)
+# Linux requirements (Belazd-IP-SNMP)
 
-Beladz-IP-SNMP runs on a **Linux gateway or router** that sees the traffic you want to count (typically the machine that forwards customer/NAT traffic). **Ubuntu 24.04 LTS** is the primary target; other recent **Debian/Ubuntu** releases usually work with the same package names.
+Belazd-IP-SNMP runs on a **Linux gateway or router** that sees the traffic you want to count (typically the machine that forwards customer/NAT traffic). **Ubuntu 24.04 LTS** is the primary target; other recent **Debian/Ubuntu** releases usually work with the same package names.
 
 ---
 
@@ -16,7 +16,7 @@ Beladz-IP-SNMP runs on a **Linux gateway or router** that sees the traffic you w
 
 ## Runtime (production server)
 
-Install on the machine where you deploy Beladz-IP-SNMP (not needed on your laptop unless you run it there).
+Install on the machine where you deploy Belazd-IP-SNMP (not needed on your laptop unless you run it there).
 
 ### Required packages
 
@@ -29,7 +29,7 @@ sudo apt-get install -y libpcap0.8
 
 On some releases the package is named `libpcap0.8t64` or similar; `apt-cache search libpcap0` shows the exact name. Ubuntu 24.04 often lists **`libpcap0.8t64`** or **`libpcap0.25`** depending on archive — install whichever `apt` offers for “libpcap runtime”.
 
-Nothing else is required at runtime if you copy a **pre-built** `dist/Beladz-IP-SNMP` binary from another machine (same OS/arch, e.g. `linux/amd64`).
+Nothing else is required at runtime if you copy a **pre-built** `dist/Belazd-IP-SNMP` binary from another machine (same OS/arch, e.g. `linux/amd64`).
 
 ### Kernel / OS
 
@@ -44,15 +44,15 @@ Nothing else is required at runtime if you copy a **pre-built** `dist/Beladz-IP-
 | **CAP_NET_RAW** | Packet capture (libpcap) |
 | **CAP_NET_BIND_SERVICE** | Bind SNMP to **UDP 161** (privileged port) |
 
-**Recommended:** run under **systemd** with `AmbientCapabilities` (see [systemd-daemon.md](systemd-daemon.md) and [Beladz-IP-SNMP.service](Beladz-IP-SNMP.service)).
+**Recommended:** run under **systemd** with `AmbientCapabilities` (see [systemd-daemon.md](systemd-daemon.md) and [Belazd-IP-SNMP.service](Belazd-IP-SNMP.service)).
 
 **Alternative:** file capabilities on the binary:
 
 ```bash
-sudo setcap cap_net_raw,cap_net_bind_service=+ep /usr/local/bin/Beladz-IP-SNMP
+sudo setcap cap_net_raw,cap_net_bind_service=+ep /usr/local/bin/Belazd-IP-SNMP
 ```
 
-**Lab only:** `sudo ./Beladz-IP-SNMP ...` or `-simulate` (no capture, counters fake).
+**Lab only:** `sudo ./Belazd-IP-SNMP ...` or `-simulate` (no capture, counters fake).
 
 Without **CAP_NET_RAW**, capture fails at startup unless you use **`-simulate`**.
 
@@ -74,8 +74,8 @@ sudo ufw allow from 10.0.0.50 to any port 161 proto udp
 
 | File | Purpose |
 |------|---------|
-| `/etc/Beladz-IP-SNMP/config.yaml` (or local `config.yaml`) | SNMP, HTTP ACL, queues, capture — **Settings** in UI |
-| `.env` next to binary or config | **Optional:** `BELADZ_HTTP_USER`, `BELADZ_HTTP_PASSWORD` only |
+| `/etc/Belazd-IP-SNMP/config.yaml` (or local `config.yaml`) | SNMP, HTTP ACL, queues, capture — **Settings** in UI |
+| `.env` next to binary or config | **Optional:** `BELAZD_HTTP_USER`, `BELAZD_HTTP_PASSWORD` only |
 
 Do not commit real `config.yaml` or `.env` to git (see `.gitignore`).
 
@@ -100,7 +100,7 @@ sudo apt-get install -y build-essential   # if CGO complains about gcc
 ./scripts/build.sh
 ```
 
-Output: **`dist/Beladz-IP-SNMP`**.
+Output: **`dist/Belazd-IP-SNMP`**.
 
 ### Build notes
 
@@ -113,7 +113,7 @@ Output: **`dist/Beladz-IP-SNMP`**.
 
 | Tool | Use |
 |------|-----|
-| **systemd** | [systemd-daemon.md](systemd-daemon.md), [Beladz-IP-SNMP.service](Beladz-IP-SNMP.service) |
+| **systemd** | [systemd-daemon.md](systemd-daemon.md), [Belazd-IP-SNMP.service](Belazd-IP-SNMP.service) |
 | **snmp** / **snmpwalk** | Test OIDs: `sudo apt install snmp` — see [mrtg-snmp.md](mrtg-snmp.md) |
 | **iproute2** | `ip link`, `ip addr` — pick `capture.interface` |
 | **MRTG / Zabbix / Cacti** | [mrtg-snmp.md](mrtg-snmp.md), [zabbix-items.md](zabbix-items.md) |
@@ -123,16 +123,16 @@ Output: **`dist/Beladz-IP-SNMP`**.
 ## Not required on the Linux gateway
 
 - Docker (unless you choose to containerize yourself)
-- Database, Redis, nginx (Beladz-IP-SNMP serves its own small web UI)
+- Database, Redis, nginx (Belazd-IP-SNMP serves its own small web UI)
 - Node.js, Python runtime
 - RRDtool / graphing (done on the poller)
 
 ---
 
-## Quick checklist before `systemctl start Beladz-IP-SNMP`
+## Quick checklist before `systemctl start Belazd-IP-SNMP`
 
 1. [ ] `libpcap` runtime installed  
-2. [ ] `Beladz-IP-SNMP` binary in place (e.g. `/usr/local/bin/Beladz-IP-SNMP`)  
+2. [ ] `Belazd-IP-SNMP` binary in place (e.g. `/usr/local/bin/Belazd-IP-SNMP`)  
 3. [ ] `config.yaml` edited: `capture.interface`, `snmp.communities`, `http.allowed`, queues  
 4. [ ] Optional `.env` for web login  
 5. [ ] Capabilities or systemd unit with **CAP_NET_RAW** / **CAP_NET_BIND_SERVICE**  

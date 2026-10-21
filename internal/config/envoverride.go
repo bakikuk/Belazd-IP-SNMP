@@ -12,11 +12,11 @@ func applyEnvOverrides(c *Config) {
 }
 
 func applyHTTPListenFromEnv(c *Config) {
-	if v := strings.TrimSpace(os.Getenv("BELADZ_HTTP_LISTEN")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("BELAZD_HTTP_LISTEN")); v != "" {
 		c.HTTP.Listen = v
 		return
 	}
-	if v := strings.TrimSpace(os.Getenv("BELADZ_HTTP_PORT")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("BELAZD_HTTP_PORT")); v != "" {
 		c.HTTP.Listen = normalizeHTTPListenPort(v)
 	}
 }
