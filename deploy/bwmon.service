@@ -1,0 +1,14 @@
+[Unit]
+Description=BWMON per-IP bandwidth SNMP agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/bwmon -config /etc/bwmon/config.yaml
+Restart=on-failure
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_RAW
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

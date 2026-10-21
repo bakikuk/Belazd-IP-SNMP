@@ -1,0 +1,10 @@
+BWMON-MIB DEFINITIONS ::= BEGIN
+
+-- Configure PEN and suffixes in config.yaml; defaults:
+-- base .1.3.6.1.4.1.55555.1.1.2
+-- queueCount      .1.1.1.0
+-- targetName.N    .1.1.2.1.1.2.N
+-- bytesIn.N       .1.1.2.1.1.8.N  (Counter64)
+-- bytesOut.N      .1.1.2.1.1.9.N  (Counter64)
+
+END
