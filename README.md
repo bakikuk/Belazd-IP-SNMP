@@ -11,7 +11,7 @@ Standalone **SNMP Counter64** source for **MRTG**, Zabbix, Cacti, and similar po
 ```bash
 cp config.example.yaml config.yaml
 cp .env.example .env
-# .env = web login only; edit SNMP / HTTP allowed in the UI or config.yaml
+# .env = login + optional HTTP port; SNMP / ACL / queues in UI or config.yaml
 ./scripts/build.sh --install-deps   # first time: installs golang-go + libpcap-dev
 ./scripts/build.sh                # later builds
 ./dist/Belazd-IP-SNMP -simulate -config config.yaml
@@ -27,12 +27,13 @@ snmpwalk -v2c -c mrtgSecret 127.0.0.1:1161 .1.3.6.1.4.1.55555
 
 Use `-insecure-snmp-open` / `-insecure-http-open` only for local testing.
 
-## `.env` (login only)
+## `.env`
 
-BWMON loads **`.env`** by default (`-env .env`; use `-env ""` to disable). Use it only for the web UI account:
+BWMON loads **`.env`** by default (`-env .env`; use `-env ""` to disable).
 
-- **`BWMON_HTTP_USER`**
-- **`BWMON_HTTP_PASSWORD`**
+- **`BWMON_HTTP_USER`** / **`BWMON_HTTP_PASSWORD`** — web login (omit both for IP-only access, no sign-in screen)
+- **`BWMON_HTTP_PORT`** — e.g. `8080` → listens on `0.0.0.0:8080` (overrides `http.listen` in YAML on each start)
+- **`BWMON_HTTP_LISTEN`** — full bind address, e.g. `127.0.0.1:8080` (wins over `BWMON_HTTP_PORT`)
 
 SNMP communities, **`http.allowed`**, capture, OIDs, and queues are configured in **Settings** (saved to **`config.yaml`**). Login **session signing** uses **`http.session_secret`** in `config.yaml` (auto-created on first start when login is enabled; you can rotate it in Settings). Shell environment variables win over `.env`. Omit both login variables for IP-only access (no sign-in screen).
 

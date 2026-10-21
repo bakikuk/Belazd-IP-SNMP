@@ -19,6 +19,22 @@ func TestLoadDotEnvLoginVars(t *testing.T) {
 	}
 }
 
+func TestHTTPListenFromEnv(t *testing.T) {
+	t.Setenv("BWMON_HTTP_PORT", "9090")
+	c := Default()
+	applyEnvOverrides(c)
+	if c.HTTP.Listen != "0.0.0.0:9090" {
+		t.Fatalf("listen=%q", c.HTTP.Listen)
+	}
+	t.Setenv("BWMON_HTTP_LISTEN", "127.0.0.1:8080")
+	t.Setenv("BWMON_HTTP_PORT", "9999")
+	c2 := Default()
+	applyEnvOverrides(c2)
+	if c2.HTTP.Listen != "127.0.0.1:8080" {
+		t.Fatalf("listen=%q", c2.HTTP.Listen)
+	}
+}
+
 func TestExpandEnvInYAML(t *testing.T) {
 	t.Setenv("BWMON_TEST_VAR", "expanded")
 	in := []byte(`value: "${BWMON_TEST_VAR}"`)

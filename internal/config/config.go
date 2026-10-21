@@ -92,7 +92,7 @@ func LoadEnvFiles(paths ...string) {
 }
 
 // Load reads and validates configuration.
-// Loads .env (login user/password only; see .env.example) and optional ${VAR} in YAML.
+// Loads .env (see .env.example) and optional ${VAR} in YAML, then BWMON_HTTP_* overrides.
 func Load(path string, insecureSNMP, insecureHTTP bool, envFiles ...string) (*Config, error) {
 	envFiles = dedupePaths(append(envFiles, DefaultEnvPaths(path)...))
 	LoadEnvFiles(envFiles...)
@@ -118,6 +118,7 @@ func Load(path string, insecureSNMP, insecureHTTP bool, envFiles ...string) (*Co
 	if insecureHTTP {
 		c.HTTP.InsecureAllowAll = true
 	}
+	applyEnvOverrides(c)
 	if err := c.Validate(insecureSNMP, insecureHTTP); err != nil {
 		return nil, err
 	}
