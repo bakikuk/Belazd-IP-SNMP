@@ -5,7 +5,7 @@ package capture
 import (
 	"fmt"
 
-	"github.com/bwmon/bwmon/internal/accounting"
+	"github.com/bakikuk/beladz-ip-snmp/internal/accounting"
 )
 
 func NewPcap(store *accounting.Store, cfg Config) (Runner, error) {

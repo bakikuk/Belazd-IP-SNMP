@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config is the on-disk configuration for bwmon.
+// Config is the on-disk configuration for Beladz-IP-SNMP.
 type Config struct {
 	Capture CaptureConfig `yaml:"capture"`
 	SNMP    SNMPConfig    `yaml:"snmp"`
@@ -92,7 +92,7 @@ func LoadEnvFiles(paths ...string) {
 }
 
 // Load reads and validates configuration.
-// Loads .env (see .env.example) and optional ${VAR} in YAML, then BWMON_HTTP_* overrides.
+// Loads .env (see .env.example) and optional ${VAR} in YAML, then BELADZ_HTTP_* overrides.
 func Load(path string, insecureSNMP, insecureHTTP bool, envFiles ...string) (*Config, error) {
 	envFiles = dedupePaths(append(envFiles, DefaultEnvPaths(path)...))
 	LoadEnvFiles(envFiles...)

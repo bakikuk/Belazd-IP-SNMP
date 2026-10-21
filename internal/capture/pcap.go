@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bwmon/bwmon/internal/accounting"
+	"github.com/bakikuk/beladz-ip-snmp/internal/accounting"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"

@@ -1,4 +1,4 @@
-module github.com/bwmon/bwmon
+module github.com/bakikuk/beladz-ip-snmp
 
 go 1.26.5
 

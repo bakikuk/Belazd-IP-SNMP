@@ -4,7 +4,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/bwmon/bwmon/internal/config"
+	"github.com/bakikuk/beladz-ip-snmp/internal/config"
 )
 
 func TestStoreCounters(t *testing.T) {

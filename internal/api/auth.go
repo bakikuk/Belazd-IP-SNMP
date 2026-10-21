@@ -11,15 +11,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bwmon/bwmon/internal/config"
+	"github.com/bakikuk/beladz-ip-snmp/internal/config"
 )
 
 const (
-	sessionCookie   = "bwmon_session"
+	sessionCookie   = "beladz_session"
 	sessionLifetime = 24 * time.Hour
 )
 
-// HTTPAuth enables login when BWMON_HTTP_USER / BWMON_HTTP_PASSWORD are set in .env.
+// HTTPAuth enables login when BELADZ_HTTP_USER / BELADZ_HTTP_PASSWORD are set in .env.
 type HTTPAuth struct {
 	users  map[string]string // username -> password
 	secret []byte
@@ -192,7 +192,7 @@ func (s *Services) withLogin(next http.HandlerFunc) http.HandlerFunc {
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"error":         "unauthorized",
 				"loginRequired": true,
-				"hint":          "POST /api/login with BWMON_HTTP_USER / BWMON_HTTP_PASSWORD from .env",
+				"hint":          "POST /api/login with BELADZ_HTTP_USER / BELADZ_HTTP_PASSWORD from .env",
 			})
 			return
 		}

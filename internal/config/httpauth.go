@@ -23,15 +23,15 @@ func RandomSessionSecret() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-// LoadHTTPAuthFromEnv returns credentials when BWMON_HTTP_USER and BWMON_HTTP_PASSWORD are set.
+// LoadHTTPAuthFromEnv returns credentials when BELADZ_HTTP_USER and BELADZ_HTTP_PASSWORD are set.
 func LoadHTTPAuthFromEnv() (user, password string, enabled bool, err error) {
-	user = strings.TrimSpace(os.Getenv("BWMON_HTTP_USER"))
-	password = os.Getenv("BWMON_HTTP_PASSWORD")
+	user = strings.TrimSpace(os.Getenv("BELADZ_HTTP_USER"))
+	password = os.Getenv("BELADZ_HTTP_PASSWORD")
 	if user == "" && password == "" {
 		return "", "", false, nil
 	}
 	if user == "" || password == "" {
-		return "", "", false, fmt.Errorf("config: set both BWMON_HTTP_USER and BWMON_HTTP_PASSWORD in .env")
+		return "", "", false, fmt.Errorf("config: set both BELADZ_HTTP_USER and BELADZ_HTTP_PASSWORD in .env")
 	}
 	return user, password, true, nil
 }

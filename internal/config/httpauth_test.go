@@ -6,8 +6,8 @@ import (
 )
 
 func TestLoadHTTPAuthFromEnv(t *testing.T) {
-	t.Setenv("BWMON_HTTP_USER", "admin")
-	t.Setenv("BWMON_HTTP_PASSWORD", "secret")
+	t.Setenv("BELADZ_HTTP_USER", "admin")
+	t.Setenv("BELADZ_HTTP_PASSWORD", "secret")
 	user, pass, on, err := LoadHTTPAuthFromEnv()
 	if err != nil || !on || user != "admin" || pass != "secret" {
 		t.Fatalf("user=%q pass=%q on=%v err=%v", user, pass, on, err)
@@ -15,8 +15,8 @@ func TestLoadHTTPAuthFromEnv(t *testing.T) {
 }
 
 func TestLoadHTTPAuthPartial(t *testing.T) {
-	t.Setenv("BWMON_HTTP_USER", "admin")
-	t.Setenv("BWMON_HTTP_PASSWORD", "")
+	t.Setenv("BELADZ_HTTP_USER", "admin")
+	t.Setenv("BELADZ_HTTP_PASSWORD", "")
 	_, _, _, err := LoadHTTPAuthFromEnv()
 	if err == nil {
 		t.Fatal("expected error")
@@ -24,8 +24,8 @@ func TestLoadHTTPAuthPartial(t *testing.T) {
 }
 
 func TestLoadHTTPAuthDisabled(t *testing.T) {
-	os.Unsetenv("BWMON_HTTP_USER")
-	os.Unsetenv("BWMON_HTTP_PASSWORD")
+	os.Unsetenv("BELADZ_HTTP_USER")
+	os.Unsetenv("BELADZ_HTTP_PASSWORD")
 	_, _, on, err := LoadHTTPAuthFromEnv()
 	if err != nil || on {
 		t.Fatalf("on=%v err=%v", on, err)

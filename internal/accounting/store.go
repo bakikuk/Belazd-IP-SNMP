@@ -6,7 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/bwmon/bwmon/internal/config"
+	"github.com/bakikuk/beladz-ip-snmp/internal/config"
 )
 
 // Matcher maps packets to a queue index.

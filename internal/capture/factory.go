@@ -3,8 +3,8 @@ package capture
 import (
 	"fmt"
 
-	"github.com/bwmon/bwmon/internal/accounting"
-	"github.com/bwmon/bwmon/internal/config"
+	"github.com/bakikuk/beladz-ip-snmp/internal/accounting"
+	"github.com/bakikuk/beladz-ip-snmp/internal/config"
 )
 
 // NewRunner starts pcap (IP targets), kernel iface stats (@eth0), or simulate.

@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bwmon/bwmon/internal/accounting"
-	"github.com/bwmon/bwmon/internal/config"
+	"github.com/bakikuk/beladz-ip-snmp/internal/accounting"
+	"github.com/bakikuk/beladz-ip-snmp/internal/config"
 )
 
 type ifStatsRunner struct {

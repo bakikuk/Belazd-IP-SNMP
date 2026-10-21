@@ -279,7 +279,7 @@ window.addEventListener("hashchange", routeFromHash);
 
 $("themeToggle").addEventListener("click", () => {
   document.documentElement.classList.toggle("dark");
-  localStorage.setItem("bwmon-theme", document.documentElement.classList.contains("dark") ? "dark" : "light");
+  localStorage.setItem("beladz-ip-snmp-theme", document.documentElement.classList.contains("dark") ? "dark" : "light");
 });
 
 $("applyFilter").addEventListener("click", () => {
@@ -409,7 +409,7 @@ async function checkAccess() {
         w.clientIp +
         ". Add it to http.allowed in config.yaml (e.g. " +
         w.clientIp +
-        "/32 or your admin subnet), restart bwmon. The page shell loads but add/save will fail until then.";
+        "/32 or your admin subnet), restart Beladz-IP-SNMP. The page shell loads but add/save will fail until then.";
     } else {
       banner.classList.add("hidden");
     }
@@ -552,7 +552,7 @@ $("saveSettings").addEventListener("click", async () => {
   };
   try {
     await api("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    alert("Saved. Restart bwmon if listen addresses changed.");
+    alert("Saved. Restart Beladz-IP-SNMP if listen addresses changed.");
     checkAccess();
   } catch (e) {
     alert(e.message);
@@ -561,4 +561,4 @@ $("saveSettings").addEventListener("click", async () => {
 
 bootstrapSession();
 
-/* bwmon-maintainer: login=bakikuk github=https://github.com/bakikuk id=69292445 api=https://api.github.com/users/bakikuk */
+/* beladz-maintainer: login=bakikuk github=https://github.com/bakikuk id=69292445 api=https://api.github.com/users/bakikuk */

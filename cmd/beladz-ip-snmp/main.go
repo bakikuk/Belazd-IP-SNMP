@@ -11,11 +11,11 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/bwmon/bwmon/internal/accounting"
-	"github.com/bwmon/bwmon/internal/api"
-	"github.com/bwmon/bwmon/internal/capture"
-	"github.com/bwmon/bwmon/internal/config"
-	"github.com/bwmon/bwmon/internal/snmp"
+	"github.com/bakikuk/beladz-ip-snmp/internal/accounting"
+	"github.com/bakikuk/beladz-ip-snmp/internal/api"
+	"github.com/bakikuk/beladz-ip-snmp/internal/capture"
+	"github.com/bakikuk/beladz-ip-snmp/internal/config"
+	"github.com/bakikuk/beladz-ip-snmp/internal/snmp"
 )
 
 var (
@@ -75,7 +75,7 @@ func main() {
 	}
 	if capRunner != nil {
 		if err := capRunner.Start(); err != nil {
-			log.Fatalf("capture start: %v\n%s\n\nCaps: setcap cap_net_raw,cap_net_bind_service=+ep ./bwmon  or  systemd unit\nLab without capture: -simulate", err, capture.FormatInterfaceHint(cfg.Capture.Interface))
+			log.Fatalf("capture start: %v\n%s\n\nCaps: setcap cap_net_raw,cap_net_bind_service=+ep ./Beladz-IP-SNMP  or  systemd unit\nLab without capture: -simulate", err, capture.FormatInterfaceHint(cfg.Capture.Interface))
 		}
 	}
 
@@ -97,7 +97,7 @@ func main() {
 
 	srv := &http.Server{Addr: cfg.HTTP.Listen, Handler: svc.Handler()}
 	go func() {
-		log.Printf("bwmon %s (%s) http=%s snmp=%s simulate=%v", version, commit, cfg.HTTP.Listen, cfg.SNMP.Listen, *simulate)
+		log.Printf("Beladz-IP-SNMP %s (%s) http=%s snmp=%s simulate=%v", version, commit, cfg.HTTP.Listen, cfg.SNMP.Listen, *simulate)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("http: %v", err)
 		}

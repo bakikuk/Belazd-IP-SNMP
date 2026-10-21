@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	"github.com/bwmon/bwmon/internal/config"
+	"github.com/bakikuk/beladz-ip-snmp/internal/config"
 )
 
 func TestHTTPAuthTokenRoundTrip(t *testing.T) {

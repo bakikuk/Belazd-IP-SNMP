@@ -12,11 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bwmon/bwmon/internal/acl"
-	"github.com/bwmon/bwmon/internal/accounting"
-	"github.com/bwmon/bwmon/internal/capture"
-	"github.com/bwmon/bwmon/internal/config"
-	"github.com/bwmon/bwmon/internal/snmp"
+	"github.com/bakikuk/beladz-ip-snmp/internal/acl"
+	"github.com/bakikuk/beladz-ip-snmp/internal/accounting"
+	"github.com/bakikuk/beladz-ip-snmp/internal/capture"
+	"github.com/bakikuk/beladz-ip-snmp/internal/config"
+	"github.com/bakikuk/beladz-ip-snmp/internal/snmp"
 )
 
 //go:embed web/static/*
@@ -164,7 +164,7 @@ func (s *Services) withACL(next http.HandlerFunc) http.HandlerFunc {
 				_ = json.NewEncoder(w).Encode(map[string]string{
 					"error":    "forbidden",
 					"clientIp": ipStr,
-					"hint":     "Add clientIp (or its CIDR) to http.allowed in config.yaml, then reload bwmon",
+					"hint":     "Add clientIp (or its CIDR) to http.allowed in config.yaml, then reload Beladz-IP-SNMP",
 				})
 				return
 			}

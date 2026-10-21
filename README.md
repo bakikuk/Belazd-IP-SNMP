@@ -1,4 +1,4 @@
-# BWMON — per-IP bandwidth SNMP agent
+# Beladz-IP-SNMP — per-IP bandwidth SNMP agent
 
 Standalone **SNMP Counter64** source for **MRTG**, Zabbix, Cacti, and similar pollers. Counts bytes in/out per IPv4 host or CIDR on a Linux gateway (packet capture), exposes a configurable enterprise OID tree, optional web UI.
 
@@ -14,7 +14,7 @@ cp .env.example .env
 # .env = login + optional HTTP port; SNMP / ACL / queues in UI or config.yaml
 ./scripts/build.sh --install-deps   # first time: installs golang-go + libpcap-dev
 ./scripts/build.sh                # later builds
-./dist/Belazd-IP-SNMP -simulate -config config.yaml
+./dist/Beladz-IP-SNMP -simulate -config config.yaml
 ```
 
 Windows: `.\scripts\build.ps1` (Npcap + CGO). See below.
@@ -29,11 +29,11 @@ Use `-insecure-snmp-open` / `-insecure-http-open` only for local testing.
 
 ## `.env`
 
-BWMON loads **`.env`** by default (`-env .env`; use `-env ""` to disable).
+Beladz-IP-SNMP loads **`.env`** by default (`-env .env`; use `-env ""` to disable).
 
-- **`BWMON_HTTP_USER`** / **`BWMON_HTTP_PASSWORD`** — web login (omit both for IP-only access, no sign-in screen)
-- **`BWMON_HTTP_PORT`** — e.g. `8080` → listens on `0.0.0.0:8080` (overrides `http.listen` in YAML on each start)
-- **`BWMON_HTTP_LISTEN`** — full bind address, e.g. `127.0.0.1:8080` (wins over `BWMON_HTTP_PORT`)
+- **`BELADZ_HTTP_USER`** / **`BELADZ_HTTP_PASSWORD`** — web login (omit both for IP-only access, no sign-in screen)
+- **`BELADZ_HTTP_PORT`** — e.g. `8080` → listens on `0.0.0.0:8080` (overrides `http.listen` in YAML on each start)
+- **`BELADZ_HTTP_LISTEN`** — full bind address, e.g. `127.0.0.1:8080` (wins over `BELADZ_HTTP_PORT`)
 
 SNMP communities, **`http.allowed`**, capture, OIDs, and queues are configured in **Settings** (saved to **`config.yaml`**). Login **session signing** uses **`http.session_secret`** in `config.yaml` (auto-created on first start when login is enabled; you can rotate it in Settings). Shell environment variables win over `.env`. Omit both login variables for IP-only access (no sign-in screen).
 
@@ -76,13 +76,13 @@ See [guides/linux-requirements.md](guides/linux-requirements.md) for full packag
 
 ```bash
 sudo apt install libpcap0.8t64
-sudo install -m 755 dist/Belazd-IP-SNMP /usr/local/bin/Belazd-IP-SNMP
-sudo mkdir -p /etc/bwmon
-sudo cp config.example.yaml /etc/bwmon/config.yaml
-# edit /etc/bwmon/config.yaml
-sudo cp guides/bwmon.service /etc/systemd/system/
+sudo install -m 755 dist/Beladz-IP-SNMP /usr/local/bin/Beladz-IP-SNMP
+sudo mkdir -p /etc/Beladz-IP-SNMP
+sudo cp config.example.yaml /etc/Beladz-IP-SNMP/config.yaml
+# edit /etc/Beladz-IP-SNMP/config.yaml
+sudo cp guides/Beladz-IP-SNMP.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now bwmon
+sudo systemctl enable --now Beladz-IP-SNMP
 ```
 
 Capabilities in unit: `CAP_NET_BIND_SERVICE`, `CAP_NET_RAW` for `:161` and capture.
@@ -90,11 +90,11 @@ Capabilities in unit: `CAP_NET_BIND_SERVICE`, `CAP_NET_RAW` for `:161` and captu
 **Manual binary (no systemd):** packet capture needs raw socket access:
 
 ```bash
-sudo setcap cap_net_raw,cap_net_bind_service=+ep /usr/local/bin/Belazd-IP-SNMP
-./Belazd-IP-SNMP -config /etc/bwmon/config.yaml
+sudo setcap cap_net_raw,cap_net_bind_service=+ep /usr/local/bin/Beladz-IP-SNMP
+./Beladz-IP-SNMP -config /etc/Beladz-IP-SNMP/config.yaml
 ```
 
-Or run once as root: `sudo ./Belazd-IP-SNMP ...` (not recommended long-term). Without caps, use `-simulate` for SNMP/UI testing only.
+Or run once as root: `sudo ./Beladz-IP-SNMP ...` (not recommended long-term). Without caps, use `-simulate` for SNMP/UI testing only.
 
 ## MRTG / Zabbix
 
@@ -115,4 +115,4 @@ Main CPU cost is **packet capture**, not SNMP polling. Use narrow targets/BPF; ~
 | Linux | `./scripts/build.sh` |
 | Windows | `.\scripts\build.ps1` |
 
-Output: `dist/Belazd-IP-SNMP` or `dist/Belazd-IP-SNMP.exe`.
+Output: `dist/Beladz-IP-SNMP` or `dist/Beladz-IP-SNMP.exe`.
