@@ -34,6 +34,7 @@ fi
 go test ./...
 mkdir -p dist
 COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo none)"
-CGO_ENABLED=1 go build -ldflags "-X main.version=0.1.0 -X main.commit=${COMMIT}" -o "dist/${BIN_NAME}" "${MAIN_PKG}"
+SEED_LDFLAGS="$("${ROOT}/scripts/ldflags-from-env.sh" "${ROOT}/.env" || true)"
+CGO_ENABLED=1 go build -ldflags "-X main.version=0.1.0 -X main.commit=${COMMIT} ${SEED_LDFLAGS}" -o "dist/${BIN_NAME}" "${MAIN_PKG}"
 echo "Built dist/${BIN_NAME}"
-echo "Smoke: ./dist/${BIN_NAME} -simulate -insecure-snmp-open -insecure-http-open -config config.example.yaml"
+echo "Smoke: ./dist/${BIN_NAME} -simulate -insecure-snmp-open -insecure-http-open"

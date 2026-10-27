@@ -1,3 +1,4 @@
+# Legacy migration only — first start imports this into belazd.sqlite, then renames to config.yaml.bak.
 capture:
   interface: eth0
   snaplen: 65535
@@ -18,15 +19,30 @@ snmp:
         - "192.168.1.0/24"
 
 http:
-  listen: "0.0.0.0:8080"
+  listen: "0.0.0.0:8051"  # fixed in app; this field is normalized on load
   allowed:
     - "192.168.10.0/24"
-  # session_secret: auto-generated when login (.env) is enabled; rotate in Settings
+  # session_secret: auto-generated when users exist; rotate in Settings
 
 queues:
   - index: 1
     target: "10.0.0.0/24"
     label: "Customers"
+
+# Web login accounts (optional). Imported into SQLite on first start if present.
+# Otherwise create users in the Web UI (belazd.sqlite).
+# user_groups:
+#   - id: administrators
+#     name: Administrators
+#     permissions:
+#       queues: full
+#       settings: full
+#       users: full
+#       user_groups: full
+# users:
+#   - username: admin
+#     group_id: administrators
+#     password_hash: "$2a$..."
 
 meta:
   next_index: 2

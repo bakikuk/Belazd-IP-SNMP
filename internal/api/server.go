@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/rand"
 	"embed"
 	"encoding/json"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"github.com/bakikuk/belazd-ip-snmp/internal/accounting"
 	"github.com/bakikuk/belazd-ip-snmp/internal/capture"
 	"github.com/bakikuk/belazd-ip-snmp/internal/config"
+	"github.com/bakikuk/belazd-ip-snmp/internal/db"
 	"github.com/bakikuk/belazd-ip-snmp/internal/snmp"
 )
 
@@ -24,32 +26,40 @@ var staticFiles embed.FS
 
 // Services holds runtime dependencies for HTTP handlers.
 type Services struct {
-	ConfigPath   string
-	EnvFiles     []string
 	Simulate     bool
 	InsecureSNMP bool
 	InsecureHTTP bool
 
 	mu      sync.RWMutex
 	cfg     *config.Config
+	db      *db.Store
 	store   *accounting.Store
 	snmp    *snmp.Agent
 	capture capture.Runner
 	httpACL *acl.NetSet
-	auth    *HTTPAuth
+	auth       *HTTPAuth
+	authBootID []byte
+
+	statsRatesMu sync.Mutex
+	statsRates   RateTracker
 
 	OnConfigChange func(*config.Config) error
 }
 
 // NewServices wires initial state.
-func NewServices(cfg *config.Config, store *accounting.Store, agent *snmp.Agent, cap capture.Runner, path string, simulate bool) (*Services, error) {
+func NewServices(cfg *config.Config, store *accounting.Store, agent *snmp.Agent, cap capture.Runner, database *db.Store, simulate bool) (*Services, error) {
+	bootID := make([]byte, 16)
+	if _, err := rand.Read(bootID); err != nil {
+		return nil, err
+	}
 	s := &Services{
-		ConfigPath: path,
 		Simulate:   simulate,
 		cfg:        cfg,
+		db:         database,
 		store:      store,
 		snmp:       agent,
 		capture:    cap,
+		authBootID: bootID,
 	}
 	if err := s.refreshHTTPACL(); err != nil {
 		return nil, err
@@ -61,26 +71,23 @@ func NewServices(cfg *config.Config, store *accounting.Store, agent *snmp.Agent,
 }
 
 func (s *Services) syncHTTPAuth() error {
-	users, on, err := config.HTTPUsersFromEnv()
-	if err != nil {
-		return err
-	}
-	if !on {
+	if len(s.cfg.Users) == 0 {
 		s.auth = nil
 		return nil
 	}
 	secret := strings.TrimSpace(s.cfg.HTTP.SessionSecret)
 	if secret == "" {
+		var err error
 		secret, err = config.RandomSessionSecret()
 		if err != nil {
 			return err
 		}
 		s.cfg.HTTP.SessionSecret = secret
-		if err := s.cfg.Save(s.ConfigPath); err != nil {
+		if err := s.db.SaveConfig(s.cfg); err != nil {
 			return err
 		}
 	}
-	s.auth = NewHTTPAuth(users, secret)
+	s.auth = NewHTTPAuth(s.cfg, secret, s.authBootID)
 	return nil
 }
 
@@ -111,6 +118,11 @@ func (s *Services) Handler() http.Handler {
 	mux.HandleFunc("/api/settings", s.withAPI(s.handleSettings))
 	mux.HandleFunc("/api/reload-config", s.withAPI(s.handleReload))
 	mux.HandleFunc("/api/meta", s.withAPI(s.handleMeta))
+	mux.HandleFunc("/api/user-groups", s.withAPI(s.handleUserGroups))
+	mux.HandleFunc("/api/user-groups/", s.withAPI(s.handleUserGroupByID))
+	mux.HandleFunc("/api/users", s.withAPI(s.handleUsers))
+	mux.HandleFunc("/api/users/", s.withAPI(s.handleUserByName))
+	mux.HandleFunc("/api/me/password", s.withACL(s.withLogin(s.handleMePassword)))
 	mux.HandleFunc("/api/whoami", s.handleWhoami)
 	return mux
 }
@@ -164,7 +176,7 @@ func (s *Services) withACL(next http.HandlerFunc) http.HandlerFunc {
 				_ = json.NewEncoder(w).Encode(map[string]string{
 					"error":    "forbidden",
 					"clientIp": ipStr,
-					"hint":     "Add clientIp (or its CIDR) to http.allowed in config.yaml, then reload Belazd-IP-SNMP",
+					"hint":     "Add clientIp (or its CIDR) to http.allowed in Settings, then reload",
 				})
 				return
 			}
@@ -174,49 +186,84 @@ func (s *Services) withACL(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (s *Services) handleMeta(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requirePerm(w, r, config.ModuleQueues, config.PermRead); !ok {
+		return
+	}
 	s.mu.RLock()
 	cfg := s.cfg
 	s.mu.RUnlock()
+	cfg.Capture.NormalizeInterfaces()
 	writeJSON(w, map[string]interface{}{
 		"pen":       cfg.SNMP.PEN,
 		"oidBase":   cfg.TableBase(),
 		"tableBase": "." + cfg.TableBase(),
 		"suffix":    cfg.SNMP.OIDSuffix,
 		"simulate":  s.Simulate,
+		"capture": map[string]interface{}{
+			"interface":  cfg.Capture.DefaultInterface(),
+			"interfaces": cfg.Capture.Interfaces,
+			"default":    cfg.Capture.DefaultInterface(),
+			"snaplen":    cfg.Capture.Snaplen,
+		},
+		"captureLive": s.capture != nil && !s.Simulate,
 	})
 }
 
 func (s *Services) handleStats(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requirePerm(w, r, config.ModuleQueues, config.PermRead); !ok {
+		return
+	}
 	s.mu.RLock()
 	cfg := s.cfg
 	store := s.store
 	s.mu.RUnlock()
 	snap := store.Snapshot()
+	now := time.Now()
+	s.statsRatesMu.Lock()
+	rates, ratesReady := s.statsRates.Rates(now, snap)
+	s.statsRatesMu.Unlock()
 	type row struct {
-		Index      int    `json:"index"`
-		Target     string `json:"target"`
-		TargetKind string `json:"targetKind"`
-		Label      string `json:"label"`
-		BytesIn    uint64 `json:"bytesIn"`
-		BytesOut   uint64 `json:"bytesOut"`
-		OIDIn      string `json:"oidIn"`
-		OIDOut     string `json:"oidOut"`
-		OIDName    string `json:"oidName"`
+		Index             int     `json:"index"`
+		Target            string  `json:"target"`
+		TargetKind        string  `json:"targetKind"`
+		Label             string  `json:"label"`
+		CaptureIface      string  `json:"captureIface,omitempty"`
+		CaptureIfaceError string  `json:"captureIfaceError,omitempty"`
+		BytesIn           uint64  `json:"bytesIn"`
+		BytesOut          uint64  `json:"bytesOut"`
+		BytesInPerSec     float64 `json:"bytesInPerSec,omitempty"`
+		BytesOutPerSec    float64 `json:"bytesOutPerSec,omitempty"`
+		RatesReady        bool    `json:"ratesReady"`
+		OIDIn             string  `json:"oidIn"`
+		OIDOut            string  `json:"oidOut"`
+		OIDName           string  `json:"oidName"`
 	}
 	var out []row
 	for _, q := range cfg.Queues {
 		p := snap[q.Index]
-		out = append(out, row{
-			Index:      q.Index,
-			Target:     q.Target,
-			TargetKind: config.TargetKind(q.Target),
-			Label:      q.Label,
-			BytesIn:  p.BytesIn,
-			BytesOut: p.BytesOut,
-			OIDIn:    cfg.OIDFull(cfg.SNMP.OIDSuffix.BytesIn, q.Index),
-			OIDOut:   cfg.OIDFull(cfg.SNMP.OIDSuffix.BytesOut, q.Index),
-			OIDName:  cfg.OIDFull(cfg.SNMP.OIDSuffix.TargetName, q.Index),
-		})
+		captureIface, captureErr := cfg.ResolveQueueCaptureIface(q)
+		rowRatesReady := ratesReady && captureErr == ""
+		r := row{
+			Index:             q.Index,
+			Target:            q.Target,
+			TargetKind:        config.TargetKind(q.Target),
+			Label:             q.Label,
+			CaptureIface:      captureIface,
+			CaptureIfaceError: captureErr,
+			BytesIn:           p.BytesIn,
+			BytesOut:          p.BytesOut,
+			RatesReady:        rowRatesReady,
+			OIDIn:             cfg.OIDFull(cfg.SNMP.OIDSuffix.BytesIn, q.Index),
+			OIDOut:            cfg.OIDFull(cfg.SNMP.OIDSuffix.BytesOut, q.Index),
+			OIDName:           cfg.OIDFull(cfg.SNMP.OIDSuffix.TargetName, q.Index),
+		}
+		if rowRatesReady {
+			if pair, ok := rates[q.Index]; ok {
+				r.BytesInPerSec = pair[0]
+				r.BytesOutPerSec = pair[1]
+			}
+		}
+		out = append(out, r)
 	}
 	writeJSON(w, out)
 }
@@ -224,14 +271,21 @@ func (s *Services) handleStats(w http.ResponseWriter, r *http.Request) {
 func (s *Services) handleQueues(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
+		if _, ok := s.requirePerm(w, r, config.ModuleQueues, config.PermRead); !ok {
+			return
+		}
 		s.mu.RLock()
 		cfg := s.cfg
 		s.mu.RUnlock()
 		writeJSON(w, cfg.Queues)
 	case http.MethodPost:
+		if _, ok := s.requirePerm(w, r, config.ModuleQueues, config.PermWrite); !ok {
+			return
+		}
 		var body struct {
-			Target string `json:"target"`
-			Label  string `json:"label"`
+			Target       string `json:"target"`
+			Label        string `json:"label"`
+			CaptureIface string `json:"capture_iface"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -241,15 +295,29 @@ func (s *Services) handleQueues(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		q := config.Queue{
+			Index:        0,
+			Target:       strings.TrimSpace(body.Target),
+			Label:        strings.TrimSpace(body.Label),
+			CaptureIface: strings.TrimSpace(body.CaptureIface),
+		}
+		if config.IsIfaceTarget(q.Target) {
+			q.CaptureIface = ""
+		}
 		s.mu.Lock()
+		if err := s.cfg.ValidateQueueCaptureIface(q); err != nil {
+			s.mu.Unlock()
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		idx := s.cfg.AssignNextIndex()
-		s.cfg.Queues = append(s.cfg.Queues, config.Queue{Index: idx, Target: strings.TrimSpace(body.Target), Label: strings.TrimSpace(body.Label)})
+		q.Index = idx
+		s.cfg.Queues = append(s.cfg.Queues, q)
 		if err := s.persistAndReloadLocked(); err != nil {
 			s.mu.Unlock()
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		q := s.cfg.Queues[len(s.cfg.Queues)-1]
 		s.mu.Unlock()
 		writeJSON(w, q)
 	default:
@@ -267,6 +335,9 @@ func (s *Services) handleQueueByID(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodDelete:
+		if _, ok := s.requirePerm(w, r, config.ModuleQueues, config.PermDelete); !ok {
+			return
+		}
 		s.mu.Lock()
 		found := false
 		for i, q := range s.cfg.Queues {
@@ -289,8 +360,12 @@ func (s *Services) handleQueueByID(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 		w.WriteHeader(http.StatusNoContent)
 	case http.MethodPatch:
+		if _, ok := s.requirePerm(w, r, config.ModuleQueues, config.PermWrite); !ok {
+			return
+		}
 		var body struct {
-			Label string `json:"label"`
+			Label        string `json:"label"`
+			CaptureIface string `json:"capture_iface"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -301,6 +376,14 @@ func (s *Services) handleQueueByID(w http.ResponseWriter, r *http.Request) {
 		for i, q := range s.cfg.Queues {
 			if q.Index == idx {
 				s.cfg.Queues[i].Label = strings.TrimSpace(body.Label)
+				if !config.IsIfaceTarget(q.Target) && config.IsIPTarget(q.Target) {
+					s.cfg.Queues[i].CaptureIface = strings.TrimSpace(body.CaptureIface)
+					if err := s.cfg.ValidateQueueCaptureIface(s.cfg.Queues[i]); err != nil {
+						s.mu.Unlock()
+						http.Error(w, err.Error(), http.StatusBadRequest)
+						return
+					}
+				}
 				found = true
 				break
 			}
@@ -325,11 +408,20 @@ func (s *Services) handleQueueByID(w http.ResponseWriter, r *http.Request) {
 func (s *Services) handleSettings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
+		if _, ok := s.requirePerm(w, r, config.ModuleSettings, config.PermRead); !ok {
+			return
+		}
 		s.mu.RLock()
 		cfg := s.cfg
 		s.mu.RUnlock()
+		cfg.Capture.NormalizeInterfaces()
 		writeJSON(w, map[string]interface{}{
-			"capture": cfg.Capture,
+			"capture": map[string]interface{}{
+				"interface":  cfg.Capture.DefaultInterface(),
+				"interfaces": cfg.Capture.Interfaces,
+				"default":    cfg.Capture.DefaultInterface(),
+				"snaplen":    cfg.Capture.Snaplen,
+			},
 			"snmp": map[string]interface{}{
 				"listen":      cfg.SNMP.Listen,
 				"pen":         cfg.SNMP.PEN,
@@ -338,12 +430,16 @@ func (s *Services) handleSettings(w http.ResponseWriter, r *http.Request) {
 				"communities": cfg.SNMP.Communities,
 			},
 			"http": map[string]interface{}{
-				"listen":              cfg.HTTP.Listen,
+				"listen":              config.FixedHTTPListen,
+				"listenFixed":         true,
 				"allowed":             cfg.HTTP.Allowed,
 				"sessionSecretSet":    strings.TrimSpace(cfg.HTTP.SessionSecret) != "",
 			},
 		})
 	case http.MethodPut:
+		if _, ok := s.requirePerm(w, r, config.ModuleSettings, config.PermWrite); !ok {
+			return
+		}
 		var body struct {
 			Capture   config.CaptureConfig `json:"capture"`
 			SNMP      config.SNMPConfig    `json:"snmp"`
@@ -359,18 +455,16 @@ func (s *Services) handleSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		s.mu.Lock()
 		s.cfg.Capture = body.Capture
+		s.cfg.Capture.NormalizeInterfaces()
 		if body.SNMP.Listen != "" {
 			s.cfg.SNMP.Listen = body.SNMP.Listen
 		}
 		s.cfg.SNMP.PEN = body.SNMP.PEN
 		s.cfg.SNMP.OIDBase = body.SNMP.OIDBase
-		if body.SNMP.OIDSuffix.QueueCount != "" {
-			s.cfg.SNMP.OIDSuffix = body.SNMP.OIDSuffix
-		}
+		s.cfg.SNMP.OIDSuffix.MergeNonEmpty(body.SNMP.OIDSuffix)
+		s.cfg.SNMP.OIDSuffix.FillDefaultsIfEmpty()
 		s.cfg.SNMP.Communities = body.SNMP.Communities
-		if body.HTTP.Listen != "" {
-			s.cfg.HTTP.Listen = body.HTTP.Listen
-		}
+		s.cfg.HTTP.Listen = config.FixedHTTPListen
 		s.cfg.HTTP.Allowed = body.HTTP.Allowed
 		if strings.TrimSpace(body.HTTP.SessionSecret) != "" {
 			s.cfg.HTTP.SessionSecret = strings.TrimSpace(body.HTTP.SessionSecret)
@@ -402,10 +496,19 @@ func (s *Services) handleReload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	cfg, err := config.Load(s.ConfigPath, s.InsecureSNMP || s.cfg.SNMP.InsecureAllowAll, s.InsecureHTTP || s.cfg.HTTP.InsecureAllowAll, s.EnvFiles...)
+	if _, ok := s.requirePerm(w, r, config.ModuleSettings, config.PermWrite); !ok {
+		return
+	}
+	cfg, err := s.db.LoadConfig()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if s.InsecureSNMP {
+		cfg.SNMP.InsecureAllowAll = true
+	}
+	if s.InsecureHTTP {
+		cfg.HTTP.InsecureAllowAll = true
 	}
 	s.mu.Lock()
 	s.cfg = cfg
@@ -424,7 +527,7 @@ func (s *Services) handleReload(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Services) persistAndReloadLocked() error {
-	if err := s.cfg.Save(s.ConfigPath); err != nil {
+	if err := s.db.SaveConfig(s.cfg); err != nil {
 		return err
 	}
 	s.store.Rebuild(s.cfg.Queues)
@@ -457,6 +560,13 @@ type counterSample struct {
 	in, out uint64
 }
 
+func counterDelta(cur, prev uint64) uint64 {
+	if cur >= prev {
+		return cur - prev
+	}
+	return cur
+}
+
 func (rt *RateTracker) Rates(now time.Time, snap map[int]accounting.CounterPair) (map[int][2]float64, bool) {
 	if rt.last == nil {
 		rt.last = make(map[int]counterSample)
@@ -467,15 +577,17 @@ func (rt *RateTracker) Rates(now time.Time, snap map[int]accounting.CounterPair)
 		return nil, false
 	}
 	dt := now.Sub(rt.lastTime).Seconds()
-	if dt <= 0 {
+	if dt < 0.2 {
 		return nil, false
 	}
 	out := make(map[int][2]float64)
 	for idx, p := range snap {
 		prev := rt.last[idx]
+		dIn := counterDelta(p.BytesIn, prev.in)
+		dOut := counterDelta(p.BytesOut, prev.out)
 		out[idx] = [2]float64{
-			float64(p.BytesIn-prev.in) * 8 / dt,
-			float64(p.BytesOut-prev.out) * 8 / dt,
+			float64(dIn) / dt,
+			float64(dOut) / dt,
 		}
 		rt.last[idx] = counterSample{p.BytesIn, p.BytesOut}
 	}

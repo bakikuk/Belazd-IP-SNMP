@@ -1,31 +1,17 @@
 [Unit]
 Description=Belazd-IP-SNMP per-IP bandwidth SNMP agent
-Documentation=file:///etc/Belazd-IP-SNMP/README
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/etc/Belazd-IP-SNMP
-
-# Web login credentials (optional). Leading "-" = file may be missing.
-EnvironmentFile=-/etc/Belazd-IP-SNMP/.env
-
-ExecStart=/usr/local/bin/Belazd-IP-SNMP \
-  -config /etc/Belazd-IP-SNMP/config.yaml \
-  -env /etc/Belazd-IP-SNMP/.env
-
+WorkingDirectory=/var/www/apps/ip-snmp
+ExecStart=/var/www/apps/ip-snmp/Belazd-IP-SNMP
 Restart=on-failure
 RestartSec=5
-
-# Packet capture + binding SNMP to UDP/161 without running as root long-term.
 AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_RAW
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_RAW
 NoNewPrivileges=true
-
-# Lab only — remove for production:
-# ExecStart=/usr/local/bin/Belazd-IP-SNMP -config /etc/Belazd-IP-SNMP/config.yaml -env /etc/Belazd-IP-SNMP/.env -simulate
-
 LimitNOFILE=65535
 
 [Install]

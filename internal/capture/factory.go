@@ -2,6 +2,7 @@ package capture
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/bakikuk/belazd-ip-snmp/internal/accounting"
 	"github.com/bakikuk/belazd-ip-snmp/internal/config"
@@ -10,21 +11,21 @@ import (
 // NewRunner starts pcap (IP targets), kernel iface stats (@eth0), or simulate.
 func NewRunner(store *accounting.Store, cfg *config.Config, simulate bool) (Runner, error) {
 	var indices []int
-	hasIP := false
 	for _, q := range cfg.Queues {
 		indices = append(indices, q.Index)
-		if config.IsIPTarget(q.Target) {
-			hasIP = true
-		}
 	}
 	if simulate {
 		return NewSimulate(store, indices), nil
 	}
 	var parts []Runner
-	if hasIP {
-		fragments, forceWide := config.CaptureBPFPlan(cfg.Queues)
+	groups, skipped := cfg.GroupIPQueuesByCaptureIface()
+	for _, msg := range skipped {
+		log.Printf("belazd: capture skip %s", msg)
+	}
+	for iface, qs := range groups {
+		fragments, forceWide := config.CaptureBPFPlan(qs)
 		pcap, err := NewPcap(store, Config{
-			Interface:    cfg.Capture.Interface,
+			Interface:    iface,
 			Snaplen:      cfg.Capture.Snaplen,
 			ForceWide:    forceWide,
 			BPFFragments: fragments,

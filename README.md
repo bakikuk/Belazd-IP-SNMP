@@ -9,12 +9,11 @@ Standalone **SNMP Counter64** source for **MRTG**, Zabbix, Cacti, and similar po
 ## Quick start (lab)
 
 ```bash
-cp config.example.yaml config.yaml
-cp .env.example .env
-# .env = login + optional HTTP port; SNMP / ACL / queues in UI or config.yaml
+cp .env.example .env   # optional: first admin embedded at **build** (not used at runtime)
 ./scripts/build.sh --install-deps   # first time: installs golang-go + libpcap-dev
-./scripts/build.sh                # later builds
-./dist/Belazd-IP-SNMP -simulate -config config.yaml
+./scripts/build.sh
+./dist/Belazd-IP-SNMP -simulate -insecure-snmp-open -insecure-http-open
+# creates belazd.sqlite beside the binary; Web UI http://127.0.0.1:8051
 ```
 
 Windows: `.\scripts\build.ps1` (Npcap + CGO). See below.
@@ -27,15 +26,14 @@ snmpwalk -v2c -c mrtgSecret 127.0.0.1:1161 .1.3.6.1.4.1.55555
 
 Use `-insecure-snmp-open` / `-insecure-http-open` only for local testing.
 
-## `.env`
+## Storage (SQLite)
 
-Belazd-IP-SNMP loads **`.env`** by default (`-env .env`; use `-env ""` to disable).
+All settings, queues, users, and groups live in **`belazd.sqlite`** (default: next to the `Belazd-IP-SNMP` binary). Override with **`-data /path/to/belazd.sqlite`**.
 
-- **`BELAZD_HTTP_USER`** / **`BELAZD_HTTP_PASSWORD`** — web login (omit both for IP-only access, no sign-in screen)
-- **`BELAZD_HTTP_PORT`** — e.g. `8080` → listens on `0.0.0.0:8080` (overrides `http.listen` in YAML on each start)
-- **`BELAZD_HTTP_LISTEN`** — full bind address, e.g. `127.0.0.1:8080` (wins over `BELAZD_HTTP_PORT`)
-
-SNMP communities, **`http.allowed`**, capture, OIDs, and queues are configured in **Settings** (saved to **`config.yaml`**). Login **session signing** uses **`http.session_secret`** in `config.yaml` (auto-created on first start when login is enabled; you can rotate it in Settings). Shell environment variables win over `.env`. Omit both login variables for IP-only access (no sign-in screen).
+- **Web UI** is always **`http://<host>:8051`** (hardcoded).
+- **First run** on an empty DB: open **`http.allowed`** (`0.0.0.0/0`) with a log warning — tighten in **Settings**.
+- **One-time migration:** place legacy **`config.yaml`** beside the binary; first start imports it into SQLite and renames to **`config.yaml.bak`**.
+- **Web login:** accounts live in SQLite. **Build** with `.env` (`BELAZD_HTTP_USER` / `BELAZD_HTTP_PASSWORD`) — those values are **embedded in the binary** and seed the first admin on first start only. The **running app never reads `.env`**. Without `.env` at build time, add the first user under **Users** (UI open until then).
 
 ## Counter semantics
 
@@ -49,26 +47,33 @@ Counters are **bytes** (L3/IP length). MRTG/Zabbix usually apply **×8** for **b
 | Form | Example | Meaning |
 |------|---------|---------|
 | **Include** | `10.0.0.1,203.0.113.0/24` | Count traffic to/from **any** listed IPv4/CIDR (one SNMP index). |
-| **Exclude** | `!10.0.0.50,!192.168.1.0/24` | Count **all other** IPv4 on `capture.interface` except listed entries (wide capture — more CPU). |
-| **Interface** | `@eth0` / `if:eth0` | **Kernel NIC** `rx_bytes` / `tx_bytes` (bpytop/nload style). |
+| **Exclude** | `!10.0.0.50,!192.168.1.0/24` | Count **all other** IPv4 on the queue’s **capture NIC** except listed entries (wide capture — more CPU). |
+| **Interface** | `@eth0` / `if:eth0` | **Kernel NIC** `rx_bytes` / `tx_bytes` (bpytop/nload style). Uses the **target** name, not Settings capture list. |
 
 Do **not** mix include and exclude in one target. The web UI **Add Target** builder writes these strings for you.
+
+### Multi-NIC capture (Settings + per queue)
+
+- **Settings → Capture interfaces**: one NIC name per line. **First line = default** for new Include/Exclude queues.
+- **Add/Edit queue → Capture NIC**: which wire to sniff for that IP/exclude queue (must be in the Settings list).
+- The app opens **one libpcap handle per NIC** that has at least one IP/exclude queue assigned.
+- If a queue references a NIC no longer in Settings, it shows an error in the UI and is **skipped** until fixed (other queues keep working).
 
 ### Per-IP vs total interface (bpytop / nload)
 
 | Target | What it measures |
 |--------|------------------|
-| Single IP or include list | L3 bytes in **captured** packets matching those IPs (gateway/mirror) |
+| Single IP or include list | L3 bytes in **captured** packets matching those IPs on the queue’s capture NIC |
 | `0.0.0.0/0` in include list | Still **pcap**, not NIC totals; usually **≠** terminal Mbps |
 | `@eth0` or `if:eth0` | **Kernel NIC counters** — aligns with bpytop/nload on that interface |
 
-Use the same interface name as in `capture.interface` when comparing to terminal tools.
+Use the same interface name as the queue’s capture NIC when comparing to `tcpdump` on that interface.
 
 ## Security
 
 - **Strict startup**: non-empty `snmp.communities[].allowed` and `http.allowed` required unless insecure flags.
 - SNMP: community + **source IP** must match an entry (silent drop otherwise).
-- HTTP: same allow-list; no login — restrict with `http.allowed` and optionally **ufw**.
+- HTTP: same allow-list; optional login via SQLite users — restrict with `http.allowed` and optionally **ufw**.
 
 ## Ubuntu 24 deploy
 
@@ -76,13 +81,11 @@ See [guides/linux-requirements.md](guides/linux-requirements.md) for full packag
 
 ```bash
 sudo apt install libpcap0.8t64
-sudo install -m 755 dist/Belazd-IP-SNMP /usr/local/bin/Belazd-IP-SNMP
-sudo mkdir -p /etc/Belazd-IP-SNMP
-sudo cp config.example.yaml /etc/Belazd-IP-SNMP/config.yaml
-# edit /etc/Belazd-IP-SNMP/config.yaml
-sudo cp guides/Belazd-IP-SNMP.service /etc/systemd/system/
+sudo mkdir -p /opt/belazd-ip-snmp
+sudo install -m 755 dist/Belazd-IP-SNMP /opt/belazd-ip-snmp/
+sudo cp deploy/belazd-ip-snmp.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now Belazd-IP-SNMP
+sudo systemctl enable --now belazd-ip-snmp
 ```
 
 Capabilities in unit: `CAP_NET_BIND_SERVICE`, `CAP_NET_RAW` for `:161` and capture.
@@ -91,7 +94,7 @@ Capabilities in unit: `CAP_NET_BIND_SERVICE`, `CAP_NET_RAW` for `:161` and captu
 
 ```bash
 sudo setcap cap_net_raw,cap_net_bind_service=+ep /usr/local/bin/Belazd-IP-SNMP
-./Belazd-IP-SNMP -config /etc/Belazd-IP-SNMP/config.yaml
+./Belazd-IP-SNMP
 ```
 
 Or run once as root: `sudo ./Belazd-IP-SNMP ...` (not recommended long-term). Without caps, use `-simulate` for SNMP/UI testing only.

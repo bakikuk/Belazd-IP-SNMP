@@ -19,10 +19,10 @@ func TestStoreCounters(t *testing.T) {
 	s.AccountIPv4(net.ParseIP("192.168.1.50"), net.ParseIP("8.8.8.8"), 80)
 
 	snap := s.Snapshot()
-	if snap[1].BytesIn != 100 || snap[1].BytesOut != 200 {
+	if snap[1].BytesIn != 200 || snap[1].BytesOut != 100 {
 		t.Fatalf("host queue: got in=%d out=%d", snap[1].BytesIn, snap[1].BytesOut)
 	}
-	if snap[2].BytesIn != 50 || snap[2].BytesOut != 80 {
+	if snap[2].BytesIn != 80 || snap[2].BytesOut != 50 {
 		t.Fatalf("cidr queue: got in=%d out=%d", snap[2].BytesIn, snap[2].BytesOut)
 	}
 }
@@ -31,8 +31,8 @@ func TestStoreIncludeMulti(t *testing.T) {
 	s := NewStore([]config.Queue{{Index: 1, Target: "10.0.0.1,10.0.0.2"}})
 	s.AccountIPv4(net.ParseIP("1.2.3.4"), net.ParseIP("10.0.0.2"), 40)
 	snap := s.Snapshot()
-	if snap[1].BytesIn != 40 {
-		t.Fatalf("in=%d", snap[1].BytesIn)
+	if snap[1].BytesOut != 40 {
+		t.Fatalf("out=%d", snap[1].BytesOut)
 	}
 }
 
@@ -41,7 +41,7 @@ func TestStoreExclude(t *testing.T) {
 	s.AccountIPv4(net.ParseIP("1.2.3.4"), net.ParseIP("10.0.0.99"), 100)
 	s.AccountIPv4(net.ParseIP("1.2.3.4"), net.ParseIP("10.0.0.1"), 50)
 	snap := s.Snapshot()
-	if snap[1].BytesIn != 50 {
-		t.Fatalf("in=%d", snap[1].BytesIn)
+	if snap[1].BytesOut != 50 {
+		t.Fatalf("out=%d", snap[1].BytesOut)
 	}
 }

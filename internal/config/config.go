@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -12,50 +11,54 @@ import (
 
 // Config is the on-disk configuration for Belazd-IP-SNMP.
 type Config struct {
-	Capture CaptureConfig `yaml:"capture"`
-	SNMP    SNMPConfig    `yaml:"snmp"`
-	HTTP    HTTPConfig    `yaml:"http"`
-	Queues  []Queue       `yaml:"queues"`
-	Meta    Meta          `yaml:"meta"`
+	Capture    CaptureConfig `yaml:"capture"`
+	SNMP       SNMPConfig    `yaml:"snmp"`
+	HTTP       HTTPConfig    `yaml:"http"`
+	Queues     []Queue       `yaml:"queues"`
+	UserGroups []UserGroup   `yaml:"user_groups,omitempty"`
+	Users      []UserAccount `yaml:"users,omitempty"`
+	Meta       Meta          `yaml:"meta"`
 }
 
 type CaptureConfig struct {
-	Interface string `yaml:"interface"`
-	Snaplen   int    `yaml:"snaplen"`
+	Interface  string   `yaml:"interface" json:"interface"`
+	Interfaces []string `yaml:"interfaces" json:"interfaces"`
+	Snaplen    int      `yaml:"snaplen" json:"snaplen"`
 }
 
 type SNMPConfig struct {
-	Listen           string           `yaml:"listen"`
-	PEN              int              `yaml:"pen"`
-	OIDBase          string           `yaml:"oid_base"`
-	OIDSuffix        OIDSuffix        `yaml:"oid_suffix"`
-	Communities      []CommunityEntry `yaml:"communities"`
-	InsecureAllowAll bool             `yaml:"insecure_allow_all"`
+	Listen           string           `yaml:"listen" json:"listen"`
+	PEN              int              `yaml:"pen" json:"pen"`
+	OIDBase          string           `yaml:"oid_base" json:"oid_base"`
+	OIDSuffix        OIDSuffix        `yaml:"oid_suffix" json:"oid_suffix"`
+	Communities      []CommunityEntry `yaml:"communities" json:"communities"`
+	InsecureAllowAll bool             `yaml:"insecure_allow_all" json:"insecure_allow_all"`
 }
 
 type CommunityEntry struct {
-	Community string   `yaml:"community"`
-	Allowed   []string `yaml:"allowed"`
+	Community string   `yaml:"community" json:"community"`
+	Allowed   []string `yaml:"allowed" json:"allowed"`
 }
 
 type OIDSuffix struct {
-	QueueCount string `yaml:"queue_count"`
-	TargetName string `yaml:"target_name"`
-	BytesIn    string `yaml:"bytes_in"`
-	BytesOut   string `yaml:"bytes_out"`
+	QueueCount string `yaml:"queue_count" json:"queue_count"`
+	TargetName string `yaml:"target_name" json:"target_name"`
+	BytesIn    string `yaml:"bytes_in" json:"bytes_in"`
+	BytesOut   string `yaml:"bytes_out" json:"bytes_out"`
 }
 
 type HTTPConfig struct {
-	Listen           string   `yaml:"listen"`
-	Allowed          []string `yaml:"allowed"`
-	SessionSecret    string   `yaml:"session_secret,omitempty"`
-	InsecureAllowAll bool     `yaml:"insecure_allow_all"`
+	Listen           string   `yaml:"listen" json:"listen"`
+	Allowed          []string `yaml:"allowed" json:"allowed"`
+	SessionSecret    string   `yaml:"session_secret,omitempty" json:"session_secret,omitempty"`
+	InsecureAllowAll bool     `yaml:"insecure_allow_all" json:"insecure_allow_all"`
 }
 
 type Queue struct {
-	Index  int    `yaml:"index"`
-	Target string `yaml:"target"`
-	Label  string `yaml:"label,omitempty"`
+	Index        int    `yaml:"index" json:"index"`
+	Target       string `yaml:"target" json:"target"`
+	Label        string `yaml:"label,omitempty" json:"label,omitempty"`
+	CaptureIface string `yaml:"capture_iface,omitempty" json:"capture_iface,omitempty"`
 }
 
 type Meta struct {
@@ -65,7 +68,7 @@ type Meta struct {
 // Default returns a template config (not valid for strict startup).
 func Default() *Config {
 	return &Config{
-		Capture: CaptureConfig{Interface: "eth0", Snaplen: 65535},
+		Capture: CaptureConfig{Interface: "eth0", Interfaces: []string{"eth0"}, Snaplen: 65535},
 		SNMP: SNMPConfig{
 			Listen: ":1161",
 			PEN:    55555,
@@ -76,7 +79,7 @@ func Default() *Config {
 				BytesOut:   ".1.1.2.1.1.9",
 			},
 		},
-		HTTP: HTTPConfig{Listen: ":8080"},
+		HTTP: HTTPConfig{Listen: FixedHTTPListen},
 		Meta: Meta{NextIndex: 1},
 	}
 }
@@ -91,17 +94,15 @@ func LoadEnvFiles(paths ...string) {
 	}
 }
 
-// Load reads and validates configuration.
-// Loads .env (see .env.example) and optional ${VAR} in YAML, then BELAZD_HTTP_* overrides.
+// Load reads legacy config.yaml for one-time SQLite migration (${VAR} expanded from process env only).
 func Load(path string, insecureSNMP, insecureHTTP bool, envFiles ...string) (*Config, error) {
-	envFiles = dedupePaths(append(envFiles, DefaultEnvPaths(path)...))
-	LoadEnvFiles(envFiles...)
+	_ = envFiles // legacy signature; dotenv is not loaded at runtime
 
-	data, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	data = expandEnvInYAML(data)
+	data := expandEnvInYAML(raw)
 	c := Default()
 	if err := yaml.Unmarshal(data, c); err != nil {
 		return nil, err
@@ -109,9 +110,11 @@ func Load(path string, insecureSNMP, insecureHTTP bool, envFiles ...string) (*Co
 	if c.Capture.Snaplen <= 0 {
 		c.Capture.Snaplen = 65535
 	}
+	c.Capture.NormalizeInterfaces()
 	if c.Meta.NextIndex <= 0 {
 		c.Meta.NextIndex = 1
 	}
+	c.HTTP.Listen = FixedHTTPListen
 	if insecureSNMP {
 		c.SNMP.InsecureAllowAll = true
 	}
@@ -127,6 +130,7 @@ func Load(path string, insecureSNMP, insecureHTTP bool, envFiles ...string) (*Co
 
 // Validate checks configuration semantics.
 func (c *Config) Validate(insecureSNMP, insecureHTTP bool) error {
+	c.SNMP.OIDSuffix.FillDefaultsIfEmpty()
 	if c.SNMP.PEN <= 0 && strings.TrimSpace(c.SNMP.OIDBase) == "" {
 		return fmt.Errorf("config: snmp.pen or snmp.oid_base required")
 	}
@@ -163,6 +167,16 @@ func (c *Config) Validate(insecureSNMP, insecureHTTP bool) error {
 		if err := ValidateTarget(q.Target); err != nil {
 			return fmt.Errorf("queues[%d]: %w", i, err)
 		}
+	}
+	if err := c.ValidateUsersAndGroups(); err != nil {
+		return err
+	}
+	c.Capture.NormalizeInterfaces()
+	if c.HasIPCaptureQueues() && len(c.Capture.Interfaces) == 0 {
+		return fmt.Errorf("config: capture.interfaces required when IP/exclude queues exist")
+	}
+	if err := c.Capture.ValidateCaptureInterfaces(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -217,23 +231,6 @@ func (c *Config) OIDFull(suffix string, index int) string {
 		return "." + base + "." + suf + "." + fmt.Sprintf("%d", index)
 	}
 	return "." + base + "." + suf
-}
-
-// Save writes config atomically.
-func (c *Config) Save(path string) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	data, err := yaml.Marshal(c)
-	if err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
 }
 
 // AssignNextIndex returns the next queue index and bumps meta.

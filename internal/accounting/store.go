@@ -64,6 +64,8 @@ func (s *Store) Rebuild(queues []config.Queue) {
 }
 
 // AccountIPv4 adds length bytes for src/dst (IPv4).
+// Edge semantics (same as @iface rx/tx on the capture port): In = from target (upload),
+// Out = to target (download).
 func (s *Store) AccountIPv4(src, dst net.IP, length uint64) {
 	src = src.To4()
 	dst = dst.To4()
@@ -74,10 +76,10 @@ func (s *Store) AccountIPv4(src, dst net.IP, length uint64) {
 	matchers := s.matchers
 	s.mu.RUnlock()
 	for _, m := range matchers {
-		if m.Spec.MatchesIn(dst) {
+		if m.Spec.MatchesOut(src) {
 			s.counterIn(m.Index).Add(length)
 		}
-		if m.Spec.MatchesOut(src) {
+		if m.Spec.MatchesIn(dst) {
 			s.counterOut(m.Index).Add(length)
 		}
 	}

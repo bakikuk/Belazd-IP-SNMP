@@ -10,7 +10,7 @@ Belazd-IP-SNMP runs on a **Linux gateway or router** that sees the traffic you w
 |--------|----------------|
 | **Run the binary** | `libpcap` runtime library, correct network interface name, **CAP_NET_RAW** (+ **CAP_NET_BIND_SERVICE** if SNMP uses port 161) |
 | **Build from source** | Go toolchain, **libpcap development headers**, C compiler (CGO) |
-| **Optional** | `systemd`, `.env` for web login, MRTG/Zabbix on **another** host (not on this box) |
+| **Optional** | `systemd`, MRTG/Zabbix on **another** host (not on this box) |
 
 ---
 
@@ -35,7 +35,7 @@ Nothing else is required at runtime if you copy a **pre-built** `dist/Belazd-IP-
 
 - **Linux** with normal networking (`/sys/class/net/<iface>/statistics/` for `@eth0`-style queues).
 - **IPv4** forwarding/gateway role if you count customer traffic passing through the box.
-- Interface name in `config.yaml` → `capture.interface` must exist (`ip link`).
+- Interface name in Settings → `capture.interface` must exist (`ip link`).
 
 ### Permissions (capture + SNMP)
 
@@ -61,12 +61,12 @@ Without **CAP_NET_RAW**, capture fails at startup unless you use **`-simulate`**
 | Service | Default in example config | Notes |
 |---------|---------------------------|--------|
 | SNMP | `0.0.0.0:161` | Change in Settings if 161 is in use |
-| Web UI | `0.0.0.0:8080` | Restrict with `http.allowed` in config |
+| Web UI | `0.0.0.0:8051` (fixed) | Restrict with `http.allowed` in Settings |
 
 If you use **ufw**, allow your admin subnet and poller IPs, for example:
 
 ```bash
-sudo ufw allow from 192.168.10.0/24 to any port 8080 proto tcp
+sudo ufw allow from 192.168.10.0/24 to any port 8051 proto tcp
 sudo ufw allow from 10.0.0.50 to any port 161 proto udp
 ```
 
@@ -74,10 +74,10 @@ sudo ufw allow from 10.0.0.50 to any port 161 proto udp
 
 | File | Purpose |
 |------|---------|
-| `/etc/Belazd-IP-SNMP/config.yaml` (or local `config.yaml`) | SNMP, HTTP ACL, queues, capture — **Settings** in UI |
-| `.env` next to binary or config | **Optional:** `BELAZD_HTTP_USER`, `BELAZD_HTTP_PASSWORD` only |
+| `belazd.sqlite` (beside binary) | All settings, users, queues — Web UI |
+| `config.yaml` | **Legacy migration only** — imported once into SQLite |
 
-Do not commit real `config.yaml` or `.env` to git (see `.gitignore`).
+Do not commit `belazd.sqlite` to git (see `.gitignore`).
 
 ---
 
@@ -133,8 +133,8 @@ Output: **`dist/Belazd-IP-SNMP`**.
 
 1. [ ] `libpcap` runtime installed  
 2. [ ] `Belazd-IP-SNMP` binary in place (e.g. `/usr/local/bin/Belazd-IP-SNMP`)  
-3. [ ] `config.yaml` edited: `capture.interface`, `snmp.communities`, `http.allowed`, queues  
-4. [ ] Optional `.env` for web login  
+3. [ ] `belazd.sqlite` created (first start) or legacy `config.yaml` for one-time import  
+4. [ ] First admin: baked in at **build** from `.env`, or create under **Users** on the VM  
 5. [ ] Capabilities or systemd unit with **CAP_NET_RAW** / **CAP_NET_BIND_SERVICE**  
 6. [ ] Firewall allows poller → SNMP and admins → HTTP  
 7. [ ] Smoke test: `snmpwalk -v2c -c <community> <host>:161 .1.3.6.1.4.1.<PEN>` from an allowed source IP  

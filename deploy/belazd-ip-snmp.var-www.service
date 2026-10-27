@@ -1,0 +1,20 @@
+[Unit]
+Description=Belazd-IP-SNMP per-IP bandwidth SNMP agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=edge-cyber1
+Group=edge-cyber1
+WorkingDirectory=/var/www/apps/ip-snmp
+ExecStart=/var/www/apps/ip-snmp/Belazd-IP-SNMP -data /var/www/apps/ip-snmp/belazd.sqlite
+Restart=on-failure
+RestartSec=5
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_RAW
+NoNewPrivileges=true
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

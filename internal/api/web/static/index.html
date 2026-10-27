@@ -23,7 +23,7 @@
           <div style="font-family:var(--font-mono);font-size:9px;color:#6b7280;letter-spacing:0.2em">SECURE ACCESS</div>
         </div>
       </div>
-      <p class="login-lead">Sign in with <code>BELAZD_HTTP_USER</code> / <code>BELAZD_HTTP_PASSWORD</code> from <code>.env</code>.</p>
+      <p id="loginLead" class="login-lead">Sign in with your administrator account.</p>
       <div id="loginError" class="login-error hidden"></div>
       <form id="loginForm" class="form-grid">
         <div><label for="loginUser">Username</label><input id="loginUser" name="username" autocomplete="username" required /></div>
@@ -42,18 +42,25 @@
         </div>
       </div>
       <nav class="nav">
-        <a href="#queues" class="nav-item active" data-nav="queues"><span class="material-symbols-outlined" style="font-size:17px">lan</span> 01 Queues</a>
-        <a href="#settings" class="nav-item" data-nav="settings"><span class="material-symbols-outlined" style="font-size:17px">settings</span> 02 Settings</a>
-        <a href="#about" class="nav-item" data-nav="about"><span class="material-symbols-outlined" style="font-size:17px">info</span> 03 About</a>
+        <a href="#queues" class="nav-item active" data-nav="queues" data-perm-module="queues"><span class="material-symbols-outlined" style="font-size:17px">lan</span> Queues</a>
+        <a href="#settings" class="nav-item" data-nav="settings" data-perm-module="settings"><span class="material-symbols-outlined" style="font-size:17px">settings</span> Settings</a>
+        <a href="#usergroups" class="nav-item" data-nav="usergroups" data-perm-module="user_groups"><span class="material-symbols-outlined" style="font-size:17px">groups</span> Usergroups</a>
+        <a href="#users" class="nav-item" data-nav="users" data-perm-module="users"><span class="material-symbols-outlined" style="font-size:17px">person</span> Users</a>
+        <a href="#about" class="nav-item" data-nav="about" data-perm-module="about"><span class="material-symbols-outlined" style="font-size:17px">info</span> About</a>
       </nav>
+      <div class="sidebar-footer">
+        <span id="sessionUser" class="session-user hidden"></span>
+        <div class="sidebar-actions">
+          <button type="button" class="btn btn-secondary hidden" id="changePasswordBtn">Change password</button>
+          <button type="button" class="btn btn-secondary hidden" id="logoutBtn">Sign out</button>
+          <button type="button" class="btn btn-secondary" id="themeToggle">Theme</button>
+        </div>
+      </div>
     </aside>
     <div class="main">
       <div class="topbar">
         <span>// NETWORK OPS • SNMP TERMINAL</span>
         <span><span class="live-dot"></span> LIVE</span>
-        <span id="sessionUser" class="session-user hidden"></span>
-        <button type="button" class="btn btn-secondary hidden" id="logoutBtn" style="min-height:36px;padding:4px 12px">Sign out</button>
-        <button type="button" class="btn btn-secondary" id="themeToggle" style="min-height:36px;padding:4px 12px">Theme</button>
       </div>
       <div class="content">
         <div id="apiBanner" class="panel hidden" style="border-color:var(--critical-orange);margin-bottom:12px;font-family:var(--font-mono);font-size:12px"></div>
@@ -69,21 +76,44 @@
               <button type="button" class="btn btn-secondary" id="applyFilter">Apply Filter</button>
               <a href="#queue-add" class="btn btn-primary" id="addQueueNav">Add Target</a>
             </div>
-            <p class="table-hint">// Counters = bytes (SNMP/MRTG). Live rate = Δbytes×8÷Δt (bit/s) and Δbytes÷Δt (B/s). Scroll for OIDs.</p>
+            <p class="table-hint">// Edge port (matches @iface): <strong>In / RX</strong> = from target (src = target, upload). <strong>Out / TX</strong> = to target (dst = target, download). L3 bytes on capture iface. Scroll for OIDs.</p>
             <div class="table-wrap">
               <table>
                 <colgroup>
-                  <col class="col-idx" /><col class="col-label" /><col class="col-target" />
+                  <col class="col-idx" /><col class="col-label" /><col class="col-target" /><col class="col-capture" />
                   <col class="col-bytes" /><col class="col-bytes" /><col class="col-bps" /><col class="col-bps" />
                   <col class="col-oid" /><col class="col-oid" /><col class="col-actions" />
                 </colgroup>
-                <thead>
+                <thead id="queueTableHead">
                   <tr>
-                    <th>Idx</th><th>Label</th><th>Target</th><th>Bytes out</th><th>Bytes in</th><th>TX rate</th><th>RX rate</th><th>OID in</th><th>OID out</th><th>Actions</th>
+                    <th class="th-sortable" data-sort="index" scope="col">Idx</th>
+                    <th class="th-sortable" data-sort="label" scope="col">Label</th>
+                    <th class="th-sortable" data-sort="target" scope="col">Target</th>
+                    <th class="th-sortable" data-sort="capture" scope="col">Capture</th>
+                    <th class="th-sortable" data-sort="bytesIn" scope="col">Bytes in (↑)</th>
+                    <th class="th-sortable" data-sort="bytesOut" scope="col">Bytes out (↓)</th>
+                    <th class="th-sortable" data-sort="rxRate" scope="col">RX rate</th>
+                    <th class="th-sortable" data-sort="txRate" scope="col">TX rate</th>
+                    <th class="th-sortable" data-sort="oidIn" scope="col">OID in</th>
+                    <th class="th-sortable" data-sort="oidOut" scope="col">OID out</th>
+                    <th scope="col">Actions</th>
                   </tr>
                 </thead>
                 <tbody id="queueTableBody"></tbody>
               </table>
+            </div>
+            <div class="table-pagination" id="queuePagination">
+              <label class="pagination-size-label" for="queuePageSize">Rows per page</label>
+              <select id="queuePageSize" class="pagination-select" aria-label="Rows per page">
+                <option value="10" selected>10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+              </select>
+              <span id="queuePageInfo" class="pagination-info">Page 1 of 1</span>
+              <button type="button" class="btn btn-secondary" id="queuePagePrev" style="min-height:36px">Prev</button>
+              <button type="button" class="btn btn-secondary" id="queuePageNext" style="min-height:36px">Next</button>
             </div>
           </div>
         </section>
@@ -107,7 +137,12 @@
               <label for="addIpList">IPs / CIDRs (one per line)</label>
               <textarea id="addIpList" rows="5" placeholder="203.0.113.10&#10;10.0.0.0/24"></textarea>
             </div>
-            <div id="addExcludeWarn" class="target-warn hidden">Counts all other IPv4 on the capture interface — uses more CPU. Prefer Include when you know customer IPs.</div>
+            <div id="addExcludeWarn" class="target-warn hidden">Counts all other IPv4 on the chosen capture NIC — uses more CPU. Prefer Include when you know customer IPs.</div>
+            <div id="addCaptureBlock">
+              <label for="addCaptureIface">Capture NIC</label>
+              <select id="addCaptureIface"></select>
+              <p style="font-family:var(--font-mono);font-size:11px;color:var(--surface-muted);margin:4px 0 0">Per-IP/exclude traffic is sniffed on this interface. Configure list in Settings (first = default).</p>
+            </div>
             <div id="addIfaceBlock" class="hidden">
               <label for="addIfaceName">Interface name</label>
               <input id="addIfaceName" placeholder="eth0" autocomplete="off" />
@@ -151,22 +186,122 @@
             <div><label>Target</label><div id="editTargetDisplay" class="target-preview"></div></div>
             <p style="font-family:var(--font-mono);font-size:11px;color:var(--surface-muted);margin:0">To change targets, remove this queue and add a new one (SNMP index will change).</p>
             <div><label>Label</label><input id="editLabel" placeholder="Customer-A" /></div>
+            <div id="editCaptureBlock">
+              <label for="editCaptureIface">Capture NIC</label>
+              <select id="editCaptureIface"></select>
+              <p id="editCaptureError" class="login-error hidden"></p>
+            </div>
             <div class="actions-row">
-              <button type="button" class="btn btn-primary" id="saveEditQueue">Save Label</button>
+              <button type="button" class="btn btn-primary" id="saveEditQueue">Save</button>
               <a href="#queues" class="btn btn-secondary">Back to list</a>
+            </div>
+          </div>
+        </section>
+
+        <div id="passwordModal" class="login-screen hidden" style="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.55)">
+          <div class="login-panel panel" style="max-width:420px;margin:auto">
+            <h2 style="margin:0 0 12px;font-size:1.1rem">Change password</h2>
+            <p style="font-family:var(--font-mono);font-size:11px;color:var(--surface-muted);margin:0 0 12px">Min 8 characters, at least one letter and one digit.</p>
+            <div id="passwordModalError" class="login-error hidden"></div>
+            <form id="passwordForm" class="form-grid">
+              <div><label for="pwCurrent">Current password</label><input id="pwCurrent" type="password" autocomplete="current-password" required /></div>
+              <div><label for="pwNew">New password</label><input id="pwNew" type="password" autocomplete="new-password" required /></div>
+              <div><label for="pwConfirm">Confirm new password</label><input id="pwConfirm" type="password" autocomplete="new-password" required /></div>
+              <div class="actions-row">
+                <button type="submit" class="btn btn-primary" id="pwSubmit" style="min-height:44px">Update password</button>
+                <button type="button" class="btn btn-secondary" id="pwCancel" style="min-height:44px">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <section id="page-usergroups" class="hidden">
+          <div class="page-header">
+            <span class="module-tag">MODULE // 03</span>
+            <h1>Usergroups</h1>
+          </div>
+          <div class="panel">
+            <div class="toolbar">
+              <input type="search" id="groupFilter" placeholder="FILTER GROUPS..." />
+              <button type="button" class="btn btn-secondary" id="applyGroupFilter" style="min-height:44px">Apply Filter</button>
+              <button type="button" class="btn btn-primary hidden" id="addGroupBtn" style="min-height:44px">Add Group</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <colgroup>
+                  <col class="col-label" /><col class="col-label" /><col class="col-target" /><col class="col-target" /><col class="col-target" /><col class="col-target" /><col class="col-actions" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>ID</th><th>Name</th><th>Queues</th><th>Settings</th><th>Users</th><th>Usergroups</th><th>About</th><th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="groupTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div id="groupFormPanel" class="panel form-grid hidden" style="margin-top:12px">
+            <h2 style="margin:0;font-size:1rem" id="groupFormTitle">Add usergroup</h2>
+            <div><label for="groupFormId">Group ID</label><input id="groupFormId" placeholder="operators" autocomplete="off" /></div>
+            <div><label for="groupFormName">Display name</label><input id="groupFormName" placeholder="Operators" /></div>
+            <div class="perm-grid" id="groupPermFields"></div>
+            <div id="groupFormError" class="login-error hidden"></div>
+            <div class="actions-row">
+              <button type="button" class="btn btn-primary" id="saveGroupBtn" style="min-height:44px">Save group</button>
+              <button type="button" class="btn btn-secondary" id="cancelGroupBtn" style="min-height:44px">Cancel</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="page-users" class="hidden">
+          <div class="page-header">
+            <span class="module-tag">MODULE // 04</span>
+            <h1>Users</h1>
+          </div>
+          <div class="panel">
+            <div class="toolbar">
+              <input type="search" id="userFilter" placeholder="FILTER USERS..." />
+              <button type="button" class="btn btn-secondary" id="applyUserFilter" style="min-height:44px">Apply Filter</button>
+              <button type="button" class="btn btn-primary hidden" id="addUserBtn" style="min-height:44px">Add User</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <colgroup>
+                  <col class="col-label" /><col class="col-label" /><col class="col-actions" />
+                </colgroup>
+                <thead>
+                  <tr><th>Username</th><th>Group</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="userTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div id="userFormPanel" class="panel form-grid hidden" style="margin-top:12px">
+            <h2 style="margin:0;font-size:1rem" id="userFormTitle">Add user</h2>
+            <div><label for="userFormName">Username</label><input id="userFormName" autocomplete="off" /></div>
+            <div><label for="userFormGroup">Group</label><select id="userFormGroup"></select></div>
+            <div><label for="userFormPassword">Password</label><input id="userFormPassword" type="password" autocomplete="new-password" /><p style="font-family:var(--font-mono);font-size:11px;color:var(--surface-muted);margin:4px 0 0">Min 8 chars, letter + digit.</p></div>
+            <div id="userFormError" class="login-error hidden"></div>
+            <div class="actions-row">
+              <button type="button" class="btn btn-primary" id="saveUserBtn" style="min-height:44px">Save user</button>
+              <button type="button" class="btn btn-secondary" id="cancelUserBtn" style="min-height:44px">Cancel</button>
             </div>
           </div>
         </section>
 
         <section id="page-settings" class="hidden">
           <div class="page-header">
-            <span class="module-tag">MODULE // 02</span>
+            <span class="module-tag">MODULE // 02 — SETTINGS</span>
             <h1>Settings</h1>
           </div>
           <div class="panel form-grid">
-            <div><label>Capture interface</label><input id="capIface" /></div>
+            <div>
+              <label for="capIfaces">Capture interfaces (one per line)</label>
+              <textarea id="capIfaces" rows="4" placeholder="ens34&#10;ens35"></textarea>
+              <p style="font-family:var(--font-mono);font-size:11px;color:var(--surface-muted);margin:4px 0 0">First line = default for new IP/exclude queues. Each NIC gets its own pcap when used.</p>
+            </div>
             <div><label>SNMP listen</label><input id="snmpListen" /></div>
-            <div><label>HTTP listen</label><input id="httpListen" /></div>
+            <div><label>HTTP listen</label><input id="httpListen" readonly value="0.0.0.0:8051" /><p style="font-family:var(--font-mono);font-size:11px;color:var(--surface-muted);margin:4px 0 0">Fixed port 8051 (hardcoded).</p></div>
             <div><label>PEN</label><input id="pen" type="number" /></div>
             <div><label>OID base (optional)</label><input id="oidBase" placeholder="1.3.6.1.4.1.55555" /></div>
             <div><label>Suffix queue_count</label><input id="sufCount" /></div>
@@ -174,15 +309,15 @@
             <div><label>Suffix bytes_in</label><input id="sufIn" /></div>
             <div><label>Suffix bytes_out</label><input id="sufOut" /></div>
             <div><label>HTTP allowed (one IP/CIDR per line)</label><textarea id="httpAllowed" rows="4"></textarea></div>
-            <div><label>Login session secret</label><input id="httpSessionSecret" type="password" autocomplete="new-password" placeholder="Leave blank to keep current" /><p style="font-family:var(--font-mono);font-size:11px;color:var(--surface-muted);margin:4px 0 0">Stored in config.yaml. Changing it signs everyone out.</p></div>
+            <div><label>Login session secret</label><input id="httpSessionSecret" type="password" autocomplete="new-password" placeholder="Leave blank to keep current" /><p style="font-family:var(--font-mono);font-size:11px;color:var(--surface-muted);margin:4px 0 0">Stored in belazd.sqlite. Changing it signs everyone out.</p></div>
             <div><label>SNMP communities (JSON)</label><textarea id="snmpCommunities" rows="8"></textarea></div>
-            <button type="button" class="btn btn-primary" id="saveSettings">Save Settings</button>
+            <button type="button" class="btn btn-primary" id="saveSettings" style="min-height:44px">Save Settings</button>
           </div>
         </section>
 
         <section id="page-about" class="hidden">
           <div class="page-header">
-            <span class="module-tag">MODULE // 03</span>
+            <span class="module-tag">MODULE // 05</span>
             <h1>About</h1>
           </div>
           <div class="panel about-panel">

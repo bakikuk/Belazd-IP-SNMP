@@ -1,9 +1,9 @@
 package api
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -15,22 +15,46 @@ import (
 )
 
 const (
-	sessionCookie   = "belazd_session"
-	sessionLifetime = 24 * time.Hour
+	sessionCookie      = "belazd_session"
+	sessionIdleTimeout = time.Hour
 )
 
-// HTTPAuth enables login when BELAZD_HTTP_USER / BELAZD_HTTP_PASSWORD are set in .env.
+type ctxKey int
+
+const ctxUserKey ctxKey = 1
+
+type userAuthRecord struct {
+	passwordHash string
+	groupID      string
+}
+
+// HTTPAuth enables login when config has users.
 type HTTPAuth struct {
-	users  map[string]string // username -> password
+	users  map[string]userAuthRecord
+	groups map[string]config.ModulePermissions
 	secret []byte
 }
 
-func NewHTTPAuth(users []config.HTTPUser, sessionSecret string) *HTTPAuth {
-	m := make(map[string]string, len(users))
-	for _, u := range users {
-		m[u.Username] = u.Password
+func NewHTTPAuth(cfg *config.Config, sessionSecret string, bootID []byte) *HTTPAuth {
+	key := []byte(sessionSecret)
+	if len(bootID) > 0 {
+		key = append(key, bootID...)
 	}
-	return &HTTPAuth{users: m, secret: []byte(sessionSecret)}
+	a := &HTTPAuth{
+		users:  make(map[string]userAuthRecord, len(cfg.Users)),
+		groups: make(map[string]config.ModulePermissions, len(cfg.UserGroups)),
+		secret: key,
+	}
+	for _, g := range cfg.UserGroups {
+		a.groups[g.ID] = g.Permissions
+	}
+	for _, u := range cfg.Users {
+		a.users[u.Username] = userAuthRecord{
+			passwordHash: u.PasswordHash,
+			groupID:      u.GroupID,
+		}
+	}
+	return a
 }
 
 func (a *HTTPAuth) Enabled() bool {
@@ -38,15 +62,33 @@ func (a *HTTPAuth) Enabled() bool {
 }
 
 func (a *HTTPAuth) checkCredentials(user, pass string) bool {
-	want, ok := a.users[user]
+	rec, ok := a.users[user]
 	if !ok {
 		return false
 	}
-	return subtle.ConstantTimeCompare([]byte(pass), []byte(want)) == 1
+	return config.CheckPassword(rec.passwordHash, pass)
+}
+
+func (a *HTTPAuth) groupID(user string) string {
+	if rec, ok := a.users[user]; ok {
+		return rec.groupID
+	}
+	return ""
+}
+
+func (a *HTTPAuth) permissionsFor(user string) config.ModulePermissions {
+	gid := a.groupID(user)
+	if gid == "" {
+		return config.ModulePermissions{}
+	}
+	if p, ok := a.groups[gid]; ok {
+		return p
+	}
+	return config.ModulePermissions{}
 }
 
 func (a *HTTPAuth) issueToken(user string) (string, error) {
-	exp := time.Now().Add(sessionLifetime).Unix()
+	exp := time.Now().Add(sessionIdleTimeout).Unix()
 	payload := user + "|" + strconv.FormatInt(exp, 10)
 	mac := hmac.New(sha256.New, a.secret)
 	_, _ = mac.Write([]byte(payload))
@@ -91,10 +133,72 @@ func (a *HTTPAuth) validateToken(token string) (user string, ok bool) {
 }
 
 func (a *HTTPAuth) userFromRequest(r *http.Request) (string, bool) {
+	if u, ok := r.Context().Value(ctxUserKey).(string); ok && u != "" {
+		return u, true
+	}
 	if c, err := r.Cookie(sessionCookie); err == nil && c.Value != "" {
 		return a.validateToken(c.Value)
 	}
 	return "", false
+}
+
+func (s *Services) sessionUser(r *http.Request) (string, bool) {
+	if s.auth == nil || !s.auth.Enabled() {
+		return "", false
+	}
+	return s.auth.userFromRequest(r)
+}
+
+func (s *Services) writeForbidden(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": "forbidden"})
+}
+
+func (s *Services) requirePerm(w http.ResponseWriter, r *http.Request, mod config.PermissionModule, min config.PermissionLevel) (user string, ok bool) {
+	if s.auth == nil || !s.auth.Enabled() {
+		return "", true
+	}
+	user, loggedIn := s.auth.userFromRequest(r)
+	if !loggedIn {
+		return "", false
+	}
+	if !s.auth.permissionsFor(user).AtLeast(mod, min) {
+		s.writeForbidden(w)
+		return user, false
+	}
+	return user, true
+}
+
+func (s *Services) withPerm(mod config.PermissionModule, min config.PermissionLevel, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := s.requirePerm(w, r, mod, min); !ok {
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (s *Services) setSessionCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookie,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(sessionIdleTimeout.Seconds()),
+	})
+}
+
+func (s *Services) extendSession(w http.ResponseWriter, user string) {
+	if s.auth == nil || !s.auth.Enabled() || user == "" {
+		return
+	}
+	token, err := s.auth.issueToken(user)
+	if err != nil {
+		return
+	}
+	s.setSessionCookie(w, token)
 }
 
 func (s *Services) handleSession(w http.ResponseWriter, r *http.Request) {
@@ -107,15 +211,23 @@ func (s *Services) handleSession(w http.ResponseWriter, r *http.Request) {
 	if s.httpACL != nil && ip != nil {
 		aclOK = s.httpACL.Contains(ip)
 	}
+	s.mu.RLock()
+	userCount := len(s.cfg.Users)
+	s.mu.RUnlock()
 	out := map[string]interface{}{
-		"authRequired": s.auth != nil && s.auth.Enabled(),
-		"clientIp":     ipStr,
-		"aclAllowed":   aclOK,
+		"authRequired":       s.auth != nil && s.auth.Enabled(),
+		"clientIp":           ipStr,
+		"aclAllowed":         aclOK,
+		"userCount":          userCount,
+		"idleTimeoutSeconds": int(sessionIdleTimeout.Seconds()),
 	}
 	if s.auth != nil && s.auth.Enabled() {
 		if user, ok := s.auth.userFromRequest(r); ok {
+			s.extendSession(w, user)
 			out["loggedIn"] = true
 			out["user"] = user
+			out["groupId"] = s.auth.groupID(user)
+			out["permissions"] = s.auth.permissionsFor(user).PermissionsJSON()
 		} else {
 			out["loggedIn"] = false
 		}
@@ -154,15 +266,14 @@ func (s *Services) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookie,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(sessionLifetime.Seconds()),
+	s.setSessionCookie(w, token)
+	perms := s.auth.permissionsFor(user).PermissionsJSON()
+	writeJSON(w, map[string]interface{}{
+		"status":      "ok",
+		"user":        user,
+		"groupId":     s.auth.groupID(user),
+		"permissions": perms,
 	})
-	writeJSON(w, map[string]string{"status": "ok", "user": user})
 }
 
 func (s *Services) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -186,16 +297,19 @@ func (s *Services) withLogin(next http.HandlerFunc) http.HandlerFunc {
 			next(w, r)
 			return
 		}
-		if _, ok := s.auth.userFromRequest(r); !ok {
+		user, ok := s.auth.userFromRequest(r)
+		if !ok {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"error":         "unauthorized",
 				"loginRequired": true,
-				"hint":          "POST /api/login with BELAZD_HTTP_USER / BELAZD_HTTP_PASSWORD from .env",
+				"hint":          "POST /api/login with your administrator account",
 			})
 			return
 		}
+		s.extendSession(w, user)
+		r = r.WithContext(context.WithValue(r.Context(), ctxUserKey, user))
 		next(w, r)
 	}
 }

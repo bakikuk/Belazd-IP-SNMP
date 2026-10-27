@@ -51,7 +51,7 @@ func (r *ifStatsRunner) Start() error {
 	r.wg.Add(1)
 	go func() {
 		defer r.wg.Done()
-		t := time.NewTicker(time.Second)
+		t := time.NewTicker(500 * time.Millisecond)
 		defer t.Stop()
 		for {
 			select {

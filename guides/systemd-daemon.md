@@ -4,49 +4,46 @@ Example files to run **Belazd-IP-SNMP** as a **systemd** service on Ubuntu/Debia
 
 | File | Purpose |
 |------|---------|
-| [Belazd-IP-SNMP.service](Belazd-IP-SNMP.service) | systemd unit — capabilities, paths, `.env` login |
-| [Belazd-IP-SNMP.env.example](Belazd-IP-SNMP.env.example) | Copy to `/etc/Belazd-IP-SNMP/.env` (web login only) |
+| [../deploy/belazd-ip-snmp.service](../deploy/belazd-ip-snmp.service) | systemd unit — capabilities, SQLite path |
 
-Application config (SNMP, queues, HTTP ACL) lives in **`/etc/Belazd-IP-SNMP/config.yaml`** — edit via web UI or by hand. Use [../config.example.yaml](../config.example.yaml) as a template.
+Application state lives in **`belazd.sqlite`** next to the binary (created automatically). Web users and passwords are stored there only.
 
 ## Install layout
 
 ```text
-/usr/local/bin/Belazd-IP-SNMP # binary from dist/Belazd-IP-SNMP
-/etc/Belazd-IP-SNMP/config.yaml        # main config (not in git)
-/etc/Belazd-IP-SNMP/.env               # BELAZD_HTTP_USER / BELAZD_HTTP_PASSWORD (optional)
-/etc/systemd/system/Belazd-IP-SNMP.service
+/opt/belazd-ip-snmp/Belazd-IP-SNMP   # binary
+/opt/belazd-ip-snmp/belazd.sqlite    # database (auto-created)
+/etc/systemd/system/belazd-ip-snmp.service
 ```
 
 ## Quick install
 
 ```bash
-sudo apt-get install -y libpcap0.8t64
-sudo install -m 755 dist/Belazd-IP-SNMP /usr/local/bin/Belazd-IP-SNMP
-sudo mkdir -p /etc/Belazd-IP-SNMP
-sudo install -m 600 config.example.yaml /etc/Belazd-IP-SNMP/config.yaml
-sudo install -m 600 guides/Belazd-IP-SNMP.env.example /etc/Belazd-IP-SNMP/.env
-# edit /etc/Belazd-IP-SNMP/config.yaml and /etc/Belazd-IP-SNMP/.env
-sudo install -m 644 guides/Belazd-IP-SNMP.service /etc/systemd/system/Belazd-IP-SNMP.service
+sudo apt-get install -y libpcap0.8
+sudo mkdir -p /opt/belazd-ip-snmp
+sudo cp dist/Belazd-IP-SNMP /opt/belazd-ip-snmp/
+sudo cp deploy/belazd-ip-snmp.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now Belazd-IP-SNMP
-sudo systemctl status Belazd-IP-SNMP
+sudo systemctl enable --now belazd-ip-snmp
+sudo systemctl status belazd-ip-snmp
 ```
+
+Web UI: **http://&lt;host&gt;:8051** — on first run, open **Users** to create the first account (Administrators group is pre-created).
 
 ## Useful commands
 
 ```bash
-sudo journalctl -u Belazd-IP-SNMP -f
-sudo systemctl restart Belazd-IP-SNMP
+sudo journalctl -u belazd-ip-snmp -f
+sudo systemctl restart belazd-ip-snmp
 ```
 
-After changing **`config.yaml`** from the UI, a **restart** is only required if listen addresses or capture interface changed; queue/OID updates reload in-process.
+Queue/OID updates reload in-process. Restart if **SNMP listen** or **capture interface** changed in Settings.
 
 ## Without systemd
 
 ```bash
-sudo setcap cap_net_raw,cap_net_bind_service=+ep /usr/local/bin/Belazd-IP-SNMP
-cd /etc/Belazd-IP-SNMP && /usr/local/bin/Belazd-IP-SNMP -config /etc/Belazd-IP-SNMP/config.yaml -env /etc/Belazd-IP-SNMP/.env
+sudo setcap cap_net_raw,cap_net_bind_service=+ep ./Belazd-IP-SNMP
+./Belazd-IP-SNMP
 ```
 
 See also [linux-requirements.md](linux-requirements.md).

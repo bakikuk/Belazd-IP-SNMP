@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// HTTPUser is a web UI login account (from .env only).
+// HTTPUser is a legacy YAML field (runtime accounts live in SQLite).
 type HTTPUser struct {
 	Username string
 	Password string
@@ -31,7 +31,7 @@ func LoadHTTPAuthFromEnv() (user, password string, enabled bool, err error) {
 		return "", "", false, nil
 	}
 	if user == "" || password == "" {
-		return "", "", false, fmt.Errorf("config: set both BELAZD_HTTP_USER and BELAZD_HTTP_PASSWORD in .env")
+		return "", "", false, fmt.Errorf("config: set both BELAZD_HTTP_USER and BELAZD_HTTP_PASSWORD")
 	}
 	return user, password, true, nil
 }

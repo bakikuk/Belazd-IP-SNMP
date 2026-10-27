@@ -7,7 +7,7 @@ config.yaml
 **/config.yaml
 !config.example.yaml
 
-# Secrets — login credentials (.env.example is committed)
+# Local build-time secrets (see .env.example — not loaded at runtime)
 .env
 .env.*
 !.env.example

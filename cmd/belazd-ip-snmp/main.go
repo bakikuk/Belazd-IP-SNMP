@@ -8,13 +8,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	"github.com/bakikuk/belazd-ip-snmp/internal/accounting"
 	"github.com/bakikuk/belazd-ip-snmp/internal/api"
 	"github.com/bakikuk/belazd-ip-snmp/internal/capture"
 	"github.com/bakikuk/belazd-ip-snmp/internal/config"
+	"github.com/bakikuk/belazd-ip-snmp/internal/db"
 	"github.com/bakikuk/belazd-ip-snmp/internal/snmp"
 )
 
@@ -24,37 +24,43 @@ var (
 )
 
 func main() {
-	configPath := flag.String("config", "config.yaml", "path to config file")
-	envFile := flag.String("env", ".env", "dotenv file for secrets (empty to skip)")
+	dataPath := flag.String("data", "", "SQLite database path (default: belazd.sqlite beside binary)")
+	_ = flag.String("config", "", "deprecated (ignored): settings live in belazd.sqlite")
 	simulate := flag.Bool("simulate", false, "simulate counters without capture")
 	insecureSNMP := flag.Bool("insecure-snmp-open", false, "allow SNMP from any IP (lab only)")
 	insecureHTTP := flag.Bool("insecure-http-open", false, "allow HTTP from any IP (lab only)")
 	flag.Parse()
 
-	if _, err := os.Stat(*configPath); os.IsNotExist(err) {
-		ex := config.Default()
-		ex.SNMP.Communities = []config.CommunityEntry{{Community: "public", Allowed: []string{"127.0.0.1"}}}
-		ex.HTTP.Allowed = []string{"127.0.0.1"}
-		if err := ex.Save(*configPath); err != nil {
-			log.Fatalf("create config: %v", err)
-		}
-		log.Printf("created sample %s — edit communities and http.allowed before production", *configPath)
+	dbStore, err := db.Open(*dataPath)
+	if err != nil {
+		log.Fatalf("database: %v", err)
+	}
+	defer dbStore.Close()
+
+	if err := dbStore.Bootstrap(db.BootstrapOptions{
+		ConfigYAMLPath: db.ConfigYAMLBesideExe(),
+		InsecureSNMP:   *insecureSNMP,
+		InsecureHTTP:   *insecureHTTP,
+	}); err != nil {
+		log.Fatalf("bootstrap: %v", err)
 	}
 
-	var envPaths []string
-	if strings.TrimSpace(*envFile) != "" {
-		envPaths = []string{*envFile}
-	}
-	cfg, err := config.Load(*configPath, *insecureSNMP, *insecureHTTP, envPaths...)
+	cfg, err := dbStore.LoadConfig()
 	if err != nil {
+		log.Fatalf("load config: %v", err)
+	}
+	if *insecureSNMP {
+		cfg.SNMP.InsecureAllowAll = true
+	}
+	if *insecureHTTP {
+		cfg.HTTP.InsecureAllowAll = true
+	}
+	if err := cfg.Validate(*insecureSNMP, *insecureHTTP); err != nil {
 		log.Fatalf("config: %v", err)
 	}
-	if _, _, _, err := config.LoadHTTPAuthFromEnv(); err != nil {
-		log.Fatalf("http auth: %v", err)
-	}
 
-	store := accounting.NewStore(cfg.Queues)
-	agent, err := snmp.NewAgent(cfg, store)
+	accStore := accounting.NewStore(cfg.Queues)
+	agent, err := snmp.NewAgent(cfg, accStore)
 	if err != nil {
 		log.Fatalf("snmp: %v", err)
 	}
@@ -62,14 +68,17 @@ func main() {
 		log.Fatalf("snmp listen: %v", err)
 	}
 
-	if !*simulate && cfg.Capture.Interface != "" {
-		if _, err := net.InterfaceByName(cfg.Capture.Interface); err != nil {
-			log.Fatalf("%s", capture.FormatInterfaceHint(cfg.Capture.Interface))
+	cfg.Capture.NormalizeInterfaces()
+	if !*simulate && cfg.HasIPCaptureQueues() {
+		for _, name := range cfg.Capture.Interfaces {
+			if _, err := net.InterfaceByName(name); err != nil {
+				log.Fatalf("%s", capture.FormatInterfaceHint(name))
+			}
 		}
 	}
 
 	var capRunner capture.Runner
-	capRunner, err = capture.NewRunner(store, cfg, *simulate)
+	capRunner, err = capture.NewRunner(accStore, cfg, *simulate)
 	if err != nil {
 		log.Fatalf("capture: %v", err)
 	}
@@ -79,25 +88,25 @@ func main() {
 		}
 	}
 
-	svc, err := api.NewServices(cfg, store, agent, capRunner, *configPath, *simulate)
+	svc, err := api.NewServices(cfg, accStore, agent, capRunner, dbStore, *simulate)
 	if err != nil {
 		log.Fatalf("api: %v", err)
 	}
-	svc.EnvFiles = envPaths
 	svc.InsecureSNMP = *insecureSNMP
 	svc.InsecureHTTP = *insecureHTTP
 	svc.OnConfigChange = func(c *config.Config) error {
 		var err error
-		capRunner, err = capture.Restart(capRunner, store, c, *simulate)
+		capRunner, err = capture.Restart(capRunner, accStore, c, *simulate)
 		return err
 	}
 
 	stopSNMP := make(chan struct{})
 	go agent.Serve(stopSNMP)
 
-	srv := &http.Server{Addr: cfg.HTTP.Listen, Handler: svc.Handler()}
+	httpAddr := config.FixedHTTPListen
+	srv := &http.Server{Addr: httpAddr, Handler: svc.Handler()}
 	go func() {
-		log.Printf("Belazd-IP-SNMP %s (%s) http=%s snmp=%s simulate=%v", version, commit, cfg.HTTP.Listen, cfg.SNMP.Listen, *simulate)
+		log.Printf("Belazd-IP-SNMP %s (%s) db=%s http=%s snmp=%s simulate=%v", version, commit, dbStore.Path(), httpAddr, cfg.SNMP.Listen, *simulate)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("http: %v", err)
 		}

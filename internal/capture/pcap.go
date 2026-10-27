@@ -86,7 +86,10 @@ func (r *pcapRunner) process(pkt gopacket.Packet) {
 	if !ok {
 		return
 	}
-	length := uint64(len(ipLayer.LayerContents()))
+	length := accounting.IPv4DatagramLength(ip.Length, len(ipLayer.LayerContents()))
+	if length == 0 {
+		return
+	}
 	r.store.AccountIPv4(ip.SrcIP, ip.DstIP, length)
 }
 

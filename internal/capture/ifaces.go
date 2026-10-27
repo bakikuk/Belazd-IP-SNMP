@@ -31,6 +31,6 @@ func FormatInterfaceHint(wanted string) string {
 	if err != nil || len(names) == 0 {
 		return fmt.Sprintf("interface %q not found — run: ip link show", wanted)
 	}
-	return fmt.Sprintf("interface %q not found — set capture.interface in config.yaml to one of: %s (ip link show)",
+	return fmt.Sprintf("interface %q not found — set capture.interface in Settings to one of: %s (ip link show)",
 		wanted, strings.Join(names, ", "))
 }
